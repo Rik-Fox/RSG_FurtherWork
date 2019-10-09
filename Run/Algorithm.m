@@ -1,8 +1,8 @@
-%Algors = table2struct(readtable('Minimobile0.4.csv'),'ToScalar',true);
-%Algors = table2struct(readtable('Minimobile0.55.csv'),'ToScalar',true);
-%Algors = table2struct(readtable('Minimobile0.75.csv'),'ToScalar',true);
-Algors = table2struct(readtable('MobileAlgorithms_SensSpec.csv'),'ToScalar',true);
-%Algors = table2struct(readtable('MinimobileAlgorithm_SensSpecLABS.csv'),'ToScalar',true);
+%Algors = table2struct(readtable('SensSpec/Minimobile0.4.csv'),'ToScalar',true);
+%Algors = table2struct(readtable('SensSpec/Minimobile0.55.csv'),'ToScalar',true);
+%Algors = table2struct(readtable('SensSpec/Minimobile0.75.csv'),'ToScalar',true);
+Algors = table2struct(readtable('SensSpec/MobileAlgorithms_SensSpec.csv'),'ToScalar',true);
+%Algors = table2struct(readtable('SensSpec/MinimobileAlgorithm_SensSpecLABS.csv'),'ToScalar',true);
     
 Algor_varient = Algors.name;         %extract paths
 Algor_type = Algors.Algs;

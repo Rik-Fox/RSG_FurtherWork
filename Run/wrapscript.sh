@@ -9,6 +9,6 @@ mkdir -p tmp/$SLURM_JOB_ID
 
 module --ignore-cache load "matlab"
 
-matlab -nodisplay -nosplash -r "Wrapper1($SLURM_ARRAY_TASK_ID); exit"
+matlab -nodisplay -nosplash -r "Wrapper($SLURM_ARRAY_TASK_ID); exit"
 
 rm -rf tmp/$SLURM_JOB_ID

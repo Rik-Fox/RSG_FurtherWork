@@ -1,6 +1,5 @@
 function Iter(itr)
 
-tic
 %Algorithm;     %run this first time to create paths.mat and Algors struct
 load('paths.mat')
 load("type.mat")
@@ -16,8 +15,8 @@ load('Algors.mat')
 
 % this is all algorithm paths would be this length(Algor_varient)
 
-healthzone = 3;
-screentype = 3;
+healthzone = 1;
+screentype = 1;
 
 for hz =1:healthzone
     if hz == 1
@@ -41,5 +40,4 @@ for hz =1:healthzone
         ModelPlotODE;
     end
 end
-toc
 end
