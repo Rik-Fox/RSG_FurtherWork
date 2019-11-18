@@ -21,7 +21,8 @@ Cases_30 = zeros(length(Algor_varient),healthzone,screentype);
 Cases_40 = zeros(length(Algor_varient),healthzone,screentype);
 Cases_end = zeros(length(Algor_varient),healthzone,screentype);
 
-for itr=1:length(Algor_varient)
+for itr=1:length(Algor_varient)Main body
+
     for hz =1:healthzone
         if hz == 1
             hzname = 'YasaBonga';
@@ -122,6 +123,7 @@ plot(I_40(:,3,3))
 legend("Const","Sample","Mean")
 
 title(p(1),'YasaBonga')
+Main body
 title(p(2),'Kwamouth')
 title(p(3),'Mosango')
 

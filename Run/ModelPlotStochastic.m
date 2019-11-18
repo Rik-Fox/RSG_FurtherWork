@@ -103,6 +103,8 @@ end
 save("/home/rfox/RSG_FurtherWork/RSG_FurtherWork_Data/Class_data/Classes"+string(sr)+"_"+hzname+'_'+intervention.scrname+'_'+string(Algor_varient(itr))+".mat",'Classes');
 save("/home/rfox/RSG_FurtherWork/RSG_FurtherWork_Data/Agg_data/Aggregate"+string(sr)+"_"+hzname+'_'+intervention.scrname+'_'+string(Algor_varient(itr))+".mat",'Aggregate');
 save("/home/rfox/RSG_FurtherWork/RSG_FurtherWork_Data/intervent_data/intervention_"+string(sr)+"_"+hzname+'_'+intervention.scrname+'_'+string(Algor_varient(itr))+".mat",'intervention');
+
+% reset algorithm for next run
 fixedparas.Specificity = Algors.MeanSpec(end);
 fixedparas.Sensitivity = Algors.MeanSens(end);
 %%
