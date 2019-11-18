@@ -3,11 +3,11 @@ function IterStoch(itr)
     %tic
     %Algorithm;     %run this first time to create paths.mat and Algors struct
     load('paths.mat')
-    %load('type.mat')
+    load('type.mat')
     load('Algors.mat')
     % this is all algorithm paths would be this length(Algor_varient)
 
-    healthzone = 3;
+    healthzone = 1;
     screentype = 3;
     stochruns = 10;
 
@@ -42,7 +42,7 @@ function IterStoch(itr)
                         InfElim(sr) = InfElimYear;
                     end
 
-                    save('ElimDists/'+string(hzname)+'_'+intervention.scrname+'_'+string(Algor_varient(itr))+".mat",'TransElim','ReportElim','InfElim');  
+                    save('/home/rfox/RSG_FurtherWork/RSG_FurtherWork_Data/ElimDists/'+string(hzname)+'_'+intervention.scrname+'_'+string(Algor_varient(itr))+".mat",'TransElim','ReportElim','InfElim');  
 
             end
    end

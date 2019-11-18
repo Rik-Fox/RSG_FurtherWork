@@ -1,5 +1,5 @@
-healthzone = 3;
-screentype = 3;
+healthzone = 1;
+screentype = 1;
 scrnames = ["Const" "Sample" "Mean"];
 
     %% run to pick algorithm, can comment out after firt run %%
@@ -21,7 +21,8 @@ Cases_30 = zeros(length(Algor_varient),healthzone,screentype);
 Cases_40 = zeros(length(Algor_varient),healthzone,screentype);
 Cases_end = zeros(length(Algor_varient),healthzone,screentype);
 
-for itr=1:length(Algor_varient)
+for itr=1:length(Algor_varient)Main body
+
     for hz =1:healthzone
         if hz == 1
             hzname = 'YasaBonga';
@@ -35,9 +36,9 @@ for itr=1:length(Algor_varient)
             
             scrname = scrnames(scr);
             
-            load("Class_dataODE/Classes_"+string(Algor_type(itr))+"_"+hzname+'_'+scrname+'_'+string(Algor_varient(itr))+".mat",'Classes');
-            load("Agg_dataODE/Aggregate_"+string(Algor_type(itr))+"_"+hzname+'_'+scrname+'_'+string(Algor_varient(itr))+".mat",'Aggregate');
-            load("intervent_dataODE/intervention_"+string(Algor_type(itr))+"_"+hzname+'_'+scrname+'_'+string(Algor_varient(itr))+".mat",'intervention');
+            load("/home/rfox/RSG_FurtherWork/Output/Class_dataODE/Classes_"+string(Algor_type(itr))+"_"+hzname+'_'+scrname+'_'+string(Algor_varient(itr))+".mat",'Classes');
+            load("/home/rfox/RSG_FurtherWork/Output/Agg_dataODE/Aggregate_"+string(Algor_type(itr))+"_"+hzname+'_'+scrname+'_'+string(Algor_varient(itr))+".mat",'Aggregate');
+            load("/home/rfox/RSG_FurtherWork/Output/intervent_dataODE/intervention_"+string(Algor_type(itr))+"_"+hzname+'_'+scrname+'_'+string(Algor_varient(itr))+".mat",'intervention');
             
             names = fieldnames(Classes);
             for i=1:length(names)
@@ -70,91 +71,92 @@ end
 
 save('prevdata.mat','I_30','I_40','I_end','Cases_30','Cases_40','Cases_end')
 
-% figure(1)
-% 
-% p(1) = subplot(3,1,1);
-% hold on
-% plot(I_end(:,1,1))
-% plot(I_end(:,1,2))
-% plot(I_end(:,1,3))
-% legend("Const","Sample","Mean")
-% 
-% p(2) = subplot(3,1,2);
-% hold on
-% plot(I_end(:,2,1))
-% plot(I_end(:,2,2))
-% plot(I_end(:,2,3))
-% legend("Const","Sample","Mean")
-% 
-% p(3) = subplot(3,1,3);
-% hold on
-% plot(I_end(:,3,1))
-% plot(I_end(:,3,2))
-% plot(I_end(:,3,3))
-% 
-% title(p(1),'YasaBonga')
-% title(p(2),'Kwamouth')
-% title(p(3),'Mosango')
-% 
-% savefig('PrevAt2050')
-% 
-% figure(2)
-% 
-% p(1) = subplot(3,1,1);
-% hold on
-% plot(I_40(:,1,1))
-% plot(I_40(:,1,2))
-% plot(I_40(:,1,3))
-% legend("Const","Sample","Mean")
-% 
-% p(2) = subplot(3,1,2);
-% hold on
-% plot(I_40(:,2,1))
-% plot(I_40(:,2,2))
-% plot(I_40(:,2,3))
-% legend("Const","Sample","Mean")
-% 
-% p(3) = subplot(3,1,3);
-% hold on
-% plot(I_40(:,3,1))
-% plot(I_40(:,3,2))
-% plot(I_40(:,3,3))
-% legend("Const","Sample","Mean")
-% 
-% title(p(1),'YasaBonga')
-% title(p(2),'Kwamouth')
-% title(p(3),'Mosango')
-% 
-% savefig('PrevAt2040')
-% 
-% figure(3)
-% 
-% p(1) = subplot(3,1,1);
-% hold on
-% plot(I_30(:,1,1))
-% plot(I_30(:,1,2))
-% plot(I_30(:,1,3))
-% legend("Const","Sample","Mean")
-% 
-% p(2) = subplot(3,1,2);
-% hold on
-% plot(I_30(:,2,1))
-% plot(I_30(:,2,2))
-% plot(I_30(:,2,3))
-% legend("Const","Sample","Mean")
-% 
-% p(3) = subplot(3,1,3);
-% hold on
-% plot(I_end(:,3,1))
-% plot(I_end(:,3,2))
-% plot(I_end(:,3,3))
-% legend("Const","Sample","Mean")
-% 
-% title(p(1),'YasaBonga')
-% title(p(2),'Kwamouth')
-% title(p(3),'Mosango')
-% 
-% savefig('PrevAt2030')
+figure(1)
+
+p(1) = subplot(3,1,1);
+hold on
+plot(I_end(:,1,1))
+plot(I_end(:,1,2))
+plot(I_end(:,1,3))
+legend("Const","Sample","Mean")
+
+p(2) = subplot(3,1,2);
+hold on
+plot(I_end(:,2,1))
+plot(I_end(:,2,2))
+plot(I_end(:,2,3))
+legend("Const","Sample","Mean")
+
+p(3) = subplot(3,1,3);
+hold on
+plot(I_end(:,3,1))
+plot(I_end(:,3,2))
+plot(I_end(:,3,3))
+
+title(p(1),'YasaBonga')
+title(p(2),'Kwamouth')
+title(p(3),'Mosango')
+
+savefig('/home/rfox/RSG_FurtherWork/RSG_FurtherWork_Code/Plots/PrevAt2050')
+
+figure(2)
+
+p(1) = subplot(3,1,1);
+hold on
+plot(I_40(:,1,1))
+plot(I_40(:,1,2))
+plot(I_40(:,1,3))
+legend("Const","Sample","Mean")
+
+p(2) = subplot(3,1,2);
+hold on
+plot(I_40(:,2,1))
+plot(I_40(:,2,2))
+plot(I_40(:,2,3))
+legend("Const","Sample","Mean")
+
+p(3) = subplot(3,1,3);
+hold on
+plot(I_40(:,3,1))
+plot(I_40(:,3,2))
+plot(I_40(:,3,3))
+legend("Const","Sample","Mean")
+
+title(p(1),'YasaBonga')
+Main body
+title(p(2),'Kwamouth')
+title(p(3),'Mosango')
+
+savefig('/home/rfox/RSG_FurtherWork/RSG_FurtherWork_Code/Plots/PrevAt2040')
+
+figure(3)
+
+p(1) = subplot(3,1,1);
+hold on
+plot(I_30(:,1,1))
+plot(I_30(:,1,2))
+plot(I_30(:,1,3))
+legend("Const","Sample","Mean")
+
+p(2) = subplot(3,1,2);
+hold on
+plot(I_30(:,2,1))
+plot(I_30(:,2,2))
+plot(I_30(:,2,3))
+legend("Const","Sample","Mean")
+
+p(3) = subplot(3,1,3);
+hold on
+plot(I_end(:,3,1))
+plot(I_end(:,3,2))
+plot(I_end(:,3,3))
+legend("Const","Sample","Mean")
+
+title(p(1),'YasaBonga')
+title(p(2),'Kwamouth')
+title(p(3),'Mosango')
+
+savefig('/home/rfox/RSG_FurtherWork/RSG_FurtherWork_Code/Plots/PrevAt2030')
 % 
 % %%
 % 
