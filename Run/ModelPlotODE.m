@@ -86,9 +86,9 @@ for i=1:length(names)
     eval([cell2mat(names(i)),' = Aggregate.',cell2mat(names(i)),';']);
 end
     
-save("/home/rfox/RSG_FurtherWork/RSG_FurtherWork_Data/Class_dataODEmini/Classes_"+string(Algor_type(itr))+"_"+hzname+'_'+intervention.scrname+'_'+string(Algor_varient(itr))+".mat",'Classes');
-save("/home/rfox/RSG_FurtherWork/RSG_FurtherWork_Data/Agg_dataODEmini/Aggregate_"+string(Algor_type(itr))+"_"+hzname+'_'+intervention.scrname+'_'+string(Algor_varient(itr))+".mat",'Aggregate');
-save("/home/rfox/RSG_FurtherWork/RSG_FurtherWork_Data/intervent_dataODEmini/intervention_"+string(Algor_type(itr))+"_"+hzname+'_'+intervention.scrname+'_'+string(Algor_varient(itr))+".mat",'intervention');
+save("/home/rfox/PhD_Year1/RSG_FurtherWork/Output/Class_dataODEmini/Classes_"+string(Algor_type(itr))+"_"+hzname+'_'+intervention.scrname+'_'+string(Algor_varient(itr))+".mat",'Classes');
+save("/home/rfox/PhD_Year1/RSG_FurtherWork/Output/Agg_dataODEmini/Aggregate_"+string(Algor_type(itr))+"_"+hzname+'_'+intervention.scrname+'_'+string(Algor_varient(itr))+".mat",'Aggregate');
+save("/home/rfox/PhD_Year1/RSG_FurtherWork/Output/intervent_dataODEmini/intervention_"+string(Algor_type(itr))+"_"+hzname+'_'+intervention.scrname+'_'+string(Algor_varient(itr))+".mat",'intervention');
 fixedparas.Specificity = Algors.MeanSpec(end);
 fixedparas.Sensitivity = Algors.MeanSens(end);
 %%
