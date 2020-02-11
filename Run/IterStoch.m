@@ -8,7 +8,7 @@ function IterStoch(itr)
     % this is all algorithm paths would be this length(Algor_varient)
 
     healthzone = 1;
-    screentype = 3;
+    screentype = 1;
     stochruns = 10;
 
     for hz =1:healthzone
@@ -28,7 +28,7 @@ function IterStoch(itr)
         
         pst = find(neg_log_likelihood == mostprob(1));
             
-             for scr=3:screentype
+             for scr=1:screentype
                     
                     ModelPlotODE;
                     TransElim = zeros(1,stochruns);
@@ -42,9 +42,10 @@ function IterStoch(itr)
                         InfElim(sr) = InfElimYear;
                     end
 
-                    save('/home/rfox/RSG_FurtherWork/RSG_FurtherWork_Data/ElimDists/'+string(hzname)+'_'+intervention.scrname+'_'+string(Algor_varient(itr))+".mat",'TransElim','ReportElim','InfElim');  
+                    save('/home/rfox/RSG_FurtherWork/RSG_FurtherWork_Data/ElimDists/'+string(hzname)+'_'+intervention.scrname+'_'+string(Algor_varient(itr))+".mat",'TransElim','ReportElim','InfElim');
 
             end
-   end
+    end
+   % display("done")
 end
     %toc
