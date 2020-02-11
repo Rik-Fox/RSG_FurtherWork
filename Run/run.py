@@ -1,9 +1,10 @@
 ###################################################
 # Input/Output handler for HAT modelling Feb 2020 #
-# intended to remove any further MATLAB coding    #
+# intended to remove any further MATLAB coding .  #
 ###################################################
 # Input creation and plotting can now be handled  #
-# in python                                       #
+# in python, this script must be run in same dir  #
+# as MATLAB model code however.                   #
 ###################################################
 # Based on work completed in MATHSYS RSG 2019     #
 # githib.com/Rik-Fox                              #
