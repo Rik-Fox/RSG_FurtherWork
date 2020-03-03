@@ -59,17 +59,17 @@ for i = 1:length(f1)
     else
         Classes.(f1{i}) = [Classes.(f1{i}) Classes2.(f1{i})];
     end
-    writematrix(Classes.(f1{i}), output+"/Class_Data/"+f1(i)+"/"+string(sr)+"_"+hzname+'_'+intervention.scrname+'_'+string(Algor_varient(itr))+".csv");
+    writematrix(Classes.(f1{i}), output+"/"+hzname+"/"+intervention.scrname+"/Stochastic/Class/"+f1(i)+'/'+string(Algor_varient(itr))+"_"+string(sr)+".csv");
 end
 
 Aggregate=Aggregate1;
 f1=fieldnames(Aggregate2);
 for i = 1:length(f1)
     Aggregate.(f1{i}) = [Aggregate.(f1{i}) Aggregate2.(f1{i})];    
-    writematrix(Aggregate.(f1{i}), output+"/Aggregate_Data/"+f1(i)+"/"+string(sr)+"_"+hzname+'_'+intervention.scrname+'_'+string(Algor_varient(itr))+".csv");
+    writematrix(Aggregate.(f1{i}), output+"/"+hzname+"/"+intervention.scrname+"/Stochastic/Aggregate/"+f1(i)+'/'+"/"+string(Algor_varient(itr))+"_"+string(sr)+".csv");
 end
 
 f1=fieldnames(intervention);
 for i = 1:length(f1)
-    writematrix(intervention.(f1{i}), output+"/Intervention_Data/"+f1(i)+"/"+string(sr)+"_"+hzname+'_'+intervention.scrname+'_'+string(Algor_varient(itr))+".csv");
+    writematrix(intervention.(f1{i}), output+"/"+hzname+"/"+intervention.scrname+"/Stochastic/Intervention/"+f1(i)+'/'+string(Algor_varient(itr))+"_"+string(sr)+".csv");
 end

@@ -92,7 +92,7 @@ function Alg_Iter(no_algs, input, output, stochruns)
                         end
                     end
                     
-                    writematrix(transpose([TransElim; ReportElim; InfElim]), string(output)+'/Elim_Dists_Data/'+string(hzname)+'_'+intervention.scrname+'_'+string(Algor_varient(itr))+".csv");
+                    writematrix(transpose([TransElim; ReportElim; InfElim]), output+"/"+hzname+"/"+intervention.scrname+'/Elim_Dists/'+string(Algor_varient(itr))+".csv");
                     fprintf(string(itr)+"\n")
                  end
 

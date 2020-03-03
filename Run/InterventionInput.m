@@ -9,7 +9,7 @@ PopGrowth=1.03;
 N_H=Totals.PopSize;
 %load('numpopscreen.mat');
 
-scrnames = ["Const" "Sample" "Mean"];
+scrnames = ["Constant_Screening" "Sampled_Screening" "Mean_Screening"];
 
 
 if scr == 1
