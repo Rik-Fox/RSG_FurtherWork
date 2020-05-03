@@ -1,0 +1,8 @@
+NumStrat, is number of instances of locStr but strats on differ on VC how to pick just one as dont fully understand what locStrategy is
+
+what is newAS
+
+b_spec?
+Perfect SEns?
+
+

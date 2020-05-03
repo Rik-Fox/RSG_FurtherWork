@@ -1,372 +1,298 @@
-% Model description
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%                                                                                                        %
+%   This code solves the differential equations of Warwick HAT model                                     %
+%   Warwick HAT model.                                                                                   %
+%                                                                                                        %
+%   Inputs:                                                                                              %
+%       meff - a double from GetEndemicEq.m                                                              %
+%       ICs - cell array containing initial conditions from GetEndemicEq.m                               %
+%       Data - structure containing historical data of the location                                      %
+%       Paras - structure containing all parameters (both fixed and fitted)                              %
+%       Intervention - structure containing parameters associated with interventions                     %
+%       ProjStrat - structure containing parameters associated with future strategy                      %
+%                                                                                                        %
+%   Outputs:                                                                                             %
+%       Classes - table containing time series model outputs by classes                                  %
+%       (e.g. susceptible humans, infectious vectors) and corresponding times                            %
+%       Aggregate - table containing aggregate values (e.g. active stage 1 reporting,                    %
+%       person years spent in stage 2) for each interval between screening time                          %
+%                                                                                                        %
+%   Note: hosts are (1) low-risk, random participants                                                    %
+%                   (2) high-risk, random participants                                                   %
+%                   (3) low-risk, non-participants                                                       %
+%                   (4) high-risk, non-participants                                                      %
+%                   (5) reservoir animals                                                                %
+%                   (6) non-reservoir animals, no dynamics and is ignored                                %
+%                                                                                                        %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-%Inputs:
-    %InputClasses - structure containing ICs for classes
-    %Intervention - structure containing parameters associated with interventions
-    %fixedparas - structure containing parameters associated with fixed parameters
-    %fittedparas - structure containing parameters associated with fitted parameters
+function [Classes, Aggregate] = ODEHATmodel(meff, ICs, Data, Paras, ProjStrat)
+    [S_H, E_H, I_1H, I_2H, R_H, S_A, E_A, I_A, P_V, S_V, G_V, E_1V, E_2V, E_3V, I_V] = ICs{:};
 
+    k4 = 1 - Paras.k1 - Paras.k2 - Paras.k3;
+    N_A = Data.N_H * Paras.k_A;
+    K_V = Data.N_H * Paras.k_V;
 
-%Outputs:
-    %Classes - structure containing time series model outputs by classes
-    %(e.g. susceptible humans, infectious vectors), corresponding times,and
-    %intervention time indices
-    %Aggregate - structure containing aggregate values (e.g. active stage 1 reporting,
-    %person years spent in stage 2) for each interval between screening
-    %times
-    
-function [Classes,Aggregate] = ODEHATmodel(InputClasses,intervention, fixedparas, fittedparas)
+    k = [Paras.k1 Paras.k2 Paras.k3 k4 Paras.k_A 1];
+    s_A = Paras.f_A * ((Paras.k1 + Paras.k3) + Paras.r * (Paras.k2 + k4)) * (1 + (1 - Paras.f_A - Paras.f_H) / (Paras.f_A + Paras.f_H)) / (Paras.k_A * (1 - Paras.f_A) * (1 - Paras.f_A * (1 - Paras.f_A - Paras.f_H) / ((1 - Paras.f_A) * (Paras.f_A + Paras.f_H))));
+    s_N = (1 - Paras.f_A - Paras.f_H) * ((Paras.k1 + Paras.k3) + Paras.r * (Paras.k2 + k4) + Paras.k_A * s_A) / (Paras.f_A + Paras.f_H);
+    bitepref = [1 Paras.r 1 Paras.r s_A s_N]; %biting preference on hosts (given no animal reservoir)
+    f = (bitepref .* k) / sum(bitepref .* k);
+    f(6) = [];
+    bitepref(6) = [];
 
-%%
-%Get fixed/fitted parameters (including population size)
+    NumberScreening = length(Data.ModelScreeningTime);
 
-%Combine fixed and fitted paras to access variables by names
-paras=fixedparas;
-f1=fieldnames(intervention);
-for i = 1:length(f1)
-    paras.(f1{i}) = intervention.(f1{i});
-end
-f2=fieldnames(fittedparas);
-for i = 1:length(f2)
-    paras.(f2{i}) = fittedparas.(f2{i});
-end
+    % Active screening: will move random participating Infectious (E_H and I1_H and I2_H) to Recovery at the end of the year
+    % Default AS strategy (screen Paras.k1 and Paras.k2 only)
+    Nparticipant = Data.N_H * (Paras.k1 + Paras.k2);
+    TurnOut1 = Data.ModelPeopleScreened / Nparticipant;
+    TurnOut2 = TurnOut1; % same turn out rate as Paras.k1
+    TurnOut3 = zeros(1, NumberScreening); % non-participating
+    TurnOut4 = TurnOut3; % non-participating
 
-%Access variables
+    %%% Old code doesn't run improved active screening, so skipping for now
+    %%% as have not handled the Stategy input data
 
-%Hosts are  (1) low-risk, random participants
-%           (2) high-risk, random participants
-%           (3) low-risk, non-participants
-%           (4) high-risk, non-participants
-%           (5) animals (reservoir)
-%           (5) animals (non-reservoir)
+    %     % New AS strategy is inctorduced
+    %     if Data.ModelScreeningTime(1) < ProjStrat.NewASyear && ProjStrat.NewASyear < Data.ModelScreeningTime(end)
+    %         Y = find(Data.ModelScreeningTime == ProjStrat.NewASyear);
+    %
+    %         switch ProjStrat.NewASstrat
+    %         case 'equal' % door-to-door (all populations get equal probability to be screened)
+    %             TurnOut1(Y:end) = Data.ModelPeopleScreened(Y:end) / Data.N_H;
+    %             TurnOut2(Y:end) = TurnOut1(Y:end);
+    %             TurnOut3(Y:end) = TurnOut1(Y:end);
+    %             TurnOut4(Y:end) = TurnOut1(Y:end);
+    %         case 'high' % work place screening (k4 group gets screened first and then equally screened Paras.k1 and Paras.k2)
+    %             TurnOut4(Y:end) = min(Data.ModelPeopleScreened(Y:end) / Data.N_H / k4, 1);
+    %             TurnOut1(Y:end) = max((Data.ModelPeopleScreened(Y:end) / Data.N_H - k4) / (Paras.k1 + Paras.k2), 0);
+    %             TurnOut2(Y:end) = TurnOut1(Y:end);
+    %         end
+    %     end
+    TurnOut = [TurnOut1; TurnOut2; TurnOut3; TurnOut4];
 
+    % Specificity by screening
+    ScreeningSpecificity = repmat(Paras.specificity, 1, NumberScreening);
+    % Lower specificity can exist in some years (eg MSF interventions in
+    % Ango and Ganga HZ of Orientale former province).
 
-%Define all parameters by their structure name field
-names = fieldnames(paras);
-for i=1:length(names)
-    eval([cell2mat(names(i)),' = paras.',cell2mat(names(i)),';']);
-end
+    altSpec = find(Data.ModelScreeningTime <= 0); %again hard coded as all the same
+    ScreeningSpecificity(altSpec) = ScreeningSpecificity(altSpec) * Paras.b_specificity;
 
-% R0_wanted=R_0;
+    % Also change sensitivity
+    ScreeningSensitivity = repmat(Paras.Sensitivity, 1, NumberScreening);
+    ScreeningSensitivity(altSpec) = Paras.SensitivityMSF;
 
-%humans
-k4=1-k1-k2-k3;
+    %%% hard coded to use for all years
 
-%animals
-N_A=N_H*k_A;
+    %     % Passive screening: move Infected (I1 and I2) to Recovery continuously
+    %     if Data.ModelScreeningTime(1) < ProjStrat.RDTyear && ProjStrat.RDTyear < Data.ModelScreeningTime(end)
+    %         Y = find(Data.ModelScreeningTime == ProjStrat.RDTyear);
+    %     else
+    %         Y = length(Data.ModelScreeningTime) + 1;
+    %     end
+    %     yearlyeta_H = [(1 + Paras.eta_H_amp ./ (1 + exp(-Paras.d_steep * (double(Data.ModelScreeningTime(1:Y-1)) - (Paras.d_change+Paras.eta_H_lag))))) * Paras.eta_H,...
+    %                    (1 + ProjStrat.RDTincrease) * (1 + Paras.eta_H_amp ./ (1 + exp(-Paras.d_steep * (double(Data.ModelScreeningTime(Y-1)) - (Paras.d_change+Paras.eta_H_lag))))) * Paras.eta_H * ones(1, NumberScreening - (Y-1))];
+    %     yearlygamma_H = [(1 + Paras.gamma_H_amp ./ (1 + exp(-Paras.d_steep * (double(Data.ModelScreeningTime(1:Y-1)) - Paras.d_change)))) * Paras.gamma_H,...
+    %                    (1 + ProjStrat.RDTincrease) * (1 + Paras.gamma_H_amp ./ (1 + exp(-Paras.d_steep * (double(Data.ModelScreeningTime(Y-1)) - Paras.d_change)))) * Paras.gamma_H * ones(1, NumberScreening - (Y-1))];
 
-%vectors
-K_V=N_H*paras.Kcap_over_NH;
+    yearlyeta_H = (1 + Paras.eta_H_amp ./ (1 + exp(-Paras.d_steep * (double(Data.ModelScreeningTime) - (Paras.d_change + Paras.eta_H_lag))))) * Paras.eta_H;
+    yearlygamma_H = (1 + Paras.gamma_H_amp ./ (1 + exp(-Paras.d_steep * (double(Data.ModelScreeningTime) - Paras.d_change)))) * Paras.gamma_H;
 
-%Reshape variables
-N=N_H*[k1 k2 k3 k4 k_A 1];
-d_1=eta_H; %original S1 detection rate (humans)
-eta_H=[eta_H eta_H eta_H eta_H 0 0];
-gamma_H=[gamma_H gamma_H gamma_H gamma_H 0 0];
+    %     if Data.ModelScreeningTime(1) == ProjStrat.RDTyear
+    %         yearlyeta_H = (1 + ProjStrat.RDTincrease) * (1 + Paras.eta_H_amp ./ (1 + exp(-Paras.d_steep * (double(Data.ModelScreeningTime(1) - 1) - (Paras.d_change+Paras.eta_H_lag))))) * Paras.eta_H * ones(1, NumberScreening);
+    %         yearlygamma_H = (1 + ProjStrat.RDTincrease) * (1 + Paras.gamma_H_amp ./ (1 + exp(-Paras.d_steep * (double(Data.ModelScreeningTime(1) - 1) - Paras.d_change)))) * Paras.gamma_H * ones(1, NumberScreening);
+    %     end
 
+    % calculate yearly uVector maintaining a constant death rate
+    death_rate = (1 - Paras.u) * Paras.gamma_H;
+    uVector = 1 - death_rate ./ yearlygamma_H;
 
-Phigh=k2+k4;
-s_A=f_A*((k1+k3)+r*(k2+k4))*(1+(1-f_A-f_H)/(f_A+f_H))/(k_A*(1-f_A)*(1-f_A*(1-f_A-f_H)/((1-f_A)*(f_A+f_H))));
-s_N=(1-f_A-f_H)*((k1+k3)+r*(k2+k4)+k_A*s_A)/(f_A+f_H);
-s=[1 r 1 r s_A s_N];            %biting preference on hosts (given no animal reservoir)  
-k=N./N(1);
-f=(s.*k)/sum(s.*k);
+    %%% Nor do we want VC even if Strategy data is handled
 
+    %     % Vector control
+    %     p_targetdie(1 : NumberScreening+1) = 0;
+    %     TargetFreq(1 : NumberScreening+1) = 1;
+    %     if Paras.VCstart ~= 0
+    %         Y1 = find(Data.ModelScreeningTime >= Paras.VCstart, 1);
+    %         p_targetdie(Y1:end) = Paras.TargetDie;
+    %         TargetFreq(Y1:end) = Paras.TargetFreq;
+    %     end
+    %     if ProjStrat.NewVCyear ~= 0
+    %         Y2 = find(Data.ModelScreeningTime >= ProjStrat.NewVCyear, 1);
+    %         p_targetdie(Y2:end) = ProjStrat.NewTargetDie;
+    %         TargetFreq(Y2:end) = ProjStrat.NewTargetFreq;
+    %     end
 
-%Access ICs
+    Pop = [S_H S_A E_H E_A I1_H I_A I2_H 0 R_H 0 P_V S_V G_V E1_V E2_V E3_V I_V];
+    T = 0;
 
-names = fieldnames(InputClasses);
-for i=1:length(names)
-    eval([cell2mat(names(i)),' = InputClasses.',cell2mat(names(i)),';']);
-end
+    Data.ModelScreeningTime = [Data.ModelScreeningTime Data.ModelScreeningTime(end) + 1];
+    [ActiveM1, ActiveM2, PassiveM1, PassiveM2, DeathsM, PersonYrsM1, PersonYrsM2, NewInfM, PerfectSpec, NoInfHost] = deal(zeros(1, length(Data.Years)));
+    [Active1, Active2, Passive1, Passive2, Deaths, PersonYrs1, PersonYrs2, NewInf] = deal(zeros(1, NumberScreening));
+    Spec = ones(1, NumberScreening);
 
+    Y = length(Data.Years);
 
-%%
-%Compute intervention timepoints/split high-low risk
-NumberScreenings=length(NumberPeopleScreened);
-
-%Compute the proportion of participating group will attend active screening
-TurnOut = NumberPeopleScreened./(N(1)+N(2));
-
-%If screening changes during simulation use first entry, if it changes
-%after use second (ix=number of screens +1), if it changes before use last (ix=1)
-if ScreenChangeYear>=Year(1)
-    ix=min([find(Year==ScreenChangeYear) length(Year)+1]);
-else
-    ix=1;
-end
-
-
-for j=1:ix-1
-    DandT(j,:)=[TurnOut(j)*Sensitivity*Compliance TurnOut(j)*Sensitivity*Compliance 0 0 0 0]; %Total efficacy of active detection and treatment FOR HUMANS
-    
-    %Reporting rates
-    TruePos(j,:) = [TurnOut(j)*Sensitivity TurnOut(j)*Sensitivity 0 0 0 0];        %From EH IH1 and IH2
-    FalsePos(j,:) = [TurnOut(j)*(1-Specificity) TurnOut(j)*(1-Specificity) 0 0 0 0];    %From SH
-    
-end
-
-if ScreenChangeYear<=Year(end) 
-    if strcmp(ScreenChangeType,'Equal')==1
-    
-        %After screen change
-        for j=ix:NumberScreenings
-            TurnOut(j)=NumberPeopleScreened(j)./(N(1)+N(4));
-        
-        DandT(j,:)=[TurnOut(j)*Sensitivity*Compliance TurnOut(j)*Sensitivity*Compliance 0 0 0 0] ;  %Total efficacy of active detection and treatment (humans only!)
-        %Reporting rates
-        TruePos(j,:) = [TurnOut(j)*Sensitivity TurnOut(j)*Sensitivity 0 0 0 0];
-        %From EH IH1 and IH2
-        FalsePos(j,:) = [TurnOut(j)*(1-Specificity) TurnOut(j)*(1-Specificity) 0 0 0 0];            %From SH
+    for s = 1:NumberScreening
+        % No transmissons after EOT
+        if s > 1 && Paras.alpha ~= 0 && Data.ModelScreeningTime(s) == round(Data.ModelScreeningTime(s)) && sum(NewInf(floor(Data.ModelScreeningTime) == floor(Data.ModelScreeningTime(s - 1)))) < 1 * Paras.PopGrowth.^double(Data.PopSizeYear - floor(Data.ModelScreeningTime(s - 1)))
+            Paras.alpha = 0;
         end
-        
-    elseif strcmp(ScreenChangeType,'HighFirst')==1
-        for j=ix:NumberScreenings
-            
-        TurnOut1(j)=max((NumberPeopleScreened(j)-N(4))./N(1),0);
-        TurnOut2(j)=min(NumberPeopleScreened(j)./N(4),1);
-        DandT(j,:)=[TurnOut1(j)*Sensitivity*Compliance TurnOut2(j)*Sensitivity*Compliance 0 0 0 0] ;  %Total efficacy of active detection and treatment (humans only!)
-        
-        %Reporting rates
-        TruePos(j,:) = [TurnOut1(j)*Sensitivity TurnOut2(j)*Sensitivity 0 0 0 0];                     %From EH IH1 and IH2
-        FalsePos(j,:) = [TurnOut1(j)*(1-Specificity) TurnOut2(j)*(1-Specificity) 0 0 0 0];            %From SH
-        end  
-    end   
-end
 
-%%
-%Main computation (call ODE)
+        % Expected active screening detections (S1/S2) each time interval
+        TruePos = TurnOut(:, s) * ScreeningSensitivity(s);
+        FalsePos = TurnOut(:, s) * (1 - ScreeningSpecificity(s));
 
-p_targetdie=0;
- 
-MaxTime = 0;%Duration of pre-intervention simulation
- 
-x=length(S_H);
-o=ones(1,x);
-
-T=1;
-t=MaxTime;
-
-%Run all intervention years
-if NumberScreenings>0
-    for i=1:NumberScreenings
-        
-        %Changes to passive detection
-        if Year(i)==RDTyear %double S1 and S2 detection rate
-           
-            eta_H=(1+RDTincrease)*eta_H;
-            gamma_H=(1+RDTincrease)*gamma_H;
-            
-        elseif Year(i)<RDTyear %increase S1 detection rate according to logistic function
-            
-            eta_H=(1+d_amp./(1+exp(-d_steep*(Year(i)-d_change))))*[d_1 d_1 d_1 d_1 0 0]; 
-            
+        if ScreeningSpecificity(s) ~= 1 && ...
+                ((Paras.year_spec_100pct == 0 && ((E_H(end, :) + I1_H(end, :) + I2_H(end, :)) * (TruePos - FalsePos) * 10000 / Data.N_H < 0.5 && Data.ModelScreeningTime(s) >= 2018)) || ...
+                (Paras.year_spec_100pct ~= 0 && Data.ModelScreeningTime(s) >= Paras.year_spec_100pct))
+            ScreeningSpecificity(s:end) = 1;
+            FalsePos = TurnOut(:, s) * (1 - ScreeningSpecificity(s));
         end
-        
-        %Track change to passive detection over time
-        yearlyeta_H(i,:)=eta_H;
-        yearlygamma_H(i,:)=gamma_H;
-        
-        %Changes to vector control
-        if Year(i)==VCyear
-            
-            p_targetdie=VCfunction(VCreduction,ReductionMeasured,targetdeploy);
-            
-        end
-        
-        %Update parameter which any changes to interventions
-        parameter=[x,mu_H,gamma_H,sigma_H,eta_H,omega_H,phi_H,meff,epsilon,...
-            sigma_V,mu_V,alph,p_V,s,B_V,xi_V,K_V,p_targetdie,p_survivePV,targetdeploy];
-           
-        %Reassign IC for next year based on end of last year and active
-        %screening
-        S_H1=S_H(:,end);
-        E_H1=E_H(:,end);
-        I_1H1=I_1H(:,end);
-        I_2H1=I_2H(:,end);
-        R_H1=R_H(:,end);
-        
-        %Changes to screening type
-        if Year(i)==ScreenChangeYear
-            S_H1 =[S_H1(1)+S_H1(3); S_H1(2)+S_H1(4); 0; 0; S_H1(5); S_H1(6)];
-            E_H1 =[E_H1(1)+E_H1(3); E_H1(2)+E_H1(4); 0; 0; E_H1(5); E_H1(6)];
-            I_1H1=[I_1H1(1)+I_1H1(3); I_1H1(2)+I_1H1(4); 0; 0; I_1H1(5); I_1H1(6)];
-            I_2H1=[I_2H1(1)+I_2H1(3); I_2H1(2)+I_2H1(4); 0; 0; I_2H1(5); I_2H1(6)];
-            R_H1 =[R_H1(1)+R_H1(3); R_H1(3)+R_H1(4); 0; 0; R_H1(5); R_H1(6)];
-        end
-        
-        
-        %Run ODE
-        [t2, pop2]=ode45(@diffHATmodel,[MaxTime+sum(Frequency(1:i-1)) MaxTime+sum(Frequency(1:i))],[S_H1' (o-DandT(i,:)).*E_H1' (o-DandT(i,:)).*I_1H1' (o-DandT(i,:)).*I_2H1' R_H1(:,end)'+ DandT(i,:).*(E_H(:,end)'+I_1H(:,end)'+I_2H(:,end)') S_V(end) E_1V(end) E_2V(end) E_3V(end) I_V(end) G_V(end) P_V(end)],[],parameter);
-          
-        T=[T; T(end)+length(t2)];    %Gives all the times when intervention occurs
 
-        t=[t; t2];
-        S_H=[S_H pop2(:,1:x)'];
-      
-        E_H=[E_H pop2(:,x+1:2*x)'];
-        I_1H=[I_1H pop2(:,2*x+1:3*x)'];
-        I_2H=[I_2H pop2(:,3*x+1:4*x)'];
-        R_H=[R_H pop2(:,4*x+1:5*x)'];
-        S_V=[S_V; pop2(:,5*x+1)];
-        E_1V=[E_1V; pop2(:,5*x+2)];
-        E_2V=[E_2V; pop2(:,5*x+3)];
-        E_3V=[E_3V; pop2(:,5*x+4)];
-        I_V=[I_V; pop2(:,5*x+5)];
-        G_V=[G_V; pop2(:,5*x+6)];
-        P_V=[P_V; pop2(:,5*x+7)];
+        Spec(s) = ScreeningSpecificity(s) == 1;
+        Active1(s) = I1_H(end, :) * TruePos + S_H(end, :) * FalsePos;
+        Active2(s) = I2_H(end, :) * TruePos; %assume false positives are detected as stage 1
+
+        % Dynamics
+        DandT = TurnOut(:, s)' * ScreeningSensitivity(s) * Paras.Compliance; % proportional change in different HUMAN group
+        ICs = [S_H(end, :) Pop(end, 5) E_H(end, :) .* (1 - DandT) Pop(end, 10) I1_H(end, :) .* (1 - DandT) Pop(end, 15) I2_H(end, :) .* (1 - DandT) Pop(end, 20) R_H(end, :) + (E_H(end, :) + I1_H(end, :) + I2_H(end, :)) .* DandT Pop(end, 25:32)];
+
+        parameter = Paras;
+        parameter.f = f';
+        parameter.meff = meff;
+        parameter.mu_H = [Paras.mu_H * ones(1, 4) Paras.mu_A]';
+        parameter.sigma_H = [Paras.sigma_H * ones(1, 4) Paras.sigma_A]';
+        parameter.phi_H = [Paras.phi_H * ones(1, 4) Paras.phi_A]';
+        parameter.omega_H = [Paras.omega_H * ones(1, 4) Paras.omega_A]';
+        parameter.K_V = K_V;
+
+        parameter.gamma_H = [yearlygamma_H(s) * ones(1, 4) Paras.gamma_A]';
+        parameter.eta_H = [yearlyeta_H(s) * ones(1, 4) Paras.eta_A]';
+
+        % NO VC
+
+        % parameter.p_targetdie = p_targetdie(s);
+        %parameter.TargetFreq = TargetFreq(s);
+
+        %         if (Data.ModelScreeningTime(s) < Paras.VCstart && Paras.VCstart < Data.ModelScreeningTime(s+1)) || (Data.ModelScreeningTime(s) < ProjStrat.NewVCyear && ProjStrat.NewVCyear < Data.ModelScreeningTime(s+1))
+        %             Tbreak = 365 * min(abs(Paras.VCstart - double(Data.ModelScreeningTime(s))), abs(ProjStrat.NewVCyear - double(Data.ModelScreeningTime(s))));
+        %             [t1, pop1] = ode45(@diffHATmodel, [sum(Data.ModelScreeningFreq(1 : s-1)) sum(Data.ModelScreeningFreq(1 : s-1)) + Tbreak], ICs, [], parameter);
+        %
+        %             %update VC
+        %             parameter.p_targetdie = p_targetdie(s+1);
+        %             parameter.TargetFreq = TargetFreq(s+1);
+        %             [t2, pop2] = ode45(@diffHATmodel, [sum(Data.ModelScreeningFreq(1 : s-1)) + Tbreak sum(Data.ModelScreeningFreq(1 : s))], pop1(end,:), [], parameter);
+        %
+        %             pop = [pop1; pop2(2:end,:)];
+        %             t = [t1; t2(2:end,:)];
+        %         else
+        %             [t, pop] = ode45(@diffHATmodel, [sum(Data.ModelScreeningFreq(1 : s-1)) sum(Data.ModelScreeningFreq(1 : s))], ICs, [], parameter);
+        %         end
+
+        [t, pop] = ode45(@diffHATmodel, [sum(Data.ModelScreeningFreq(1:s - 1)) sum(Data.ModelScreeningFreq(1:s))], ICs, [], parameter);
+        size(pop)
+        size(Pop)
+        Pop = [Pop; pop];
+        T = [T; t];
+
+        S_H = pop(:, 1:4);
+        E_H = pop(:, 6:9);
+        I1_H = pop(:, 11:14);
+        I2_H = pop(:, 16:19);
+        R_H = pop(:, 21:24);
+        I_V = pop(:, 32);
+        dNH = S_H + E_H + I1_H + I2_H + R_H;
+        dNH(dNH == 0) = 1;
+
+        % Person years infected in S1 and S2 %% 365 what if multiple
+        % screening per year
+        PersonYrs1(s) = trapz(t, sum(I1_H, 2)) / 365;
+        PersonYrs2(s) = trapz(t, sum(I2_H, 2)) / 365;
+
+        % Passive detections (S1/S2) each time interval
+        Passive1(s) = yearlyeta_H(s) * PersonYrs1(s) * 365;
+        Passive2(s) = uVector(s) * yearlygamma_H(s) * PersonYrs2(s) * 365;
+
+        % Deaths
+        Deaths(s) = (1 - uVector(s)) * yearlygamma_H(s) * PersonYrs2(s) * 365;
+
+        % New infections (influx into I_1H) %%all human combined???
+        FOI = Paras.alpha * meff * bsxfun(@times, f(1:4), S_H ./ dNH) .* I_V;
+        NewInf(s) = sum(trapz(t, FOI));
 
     end
-end
 
-
-
-%%
-%Rearrange outputs
-
-%All timepoints
-Classes=struct('tYear',(t'-MaxTime)./365+Year(1),'tIntervention',T(1:end-1)','S_H',S_H,'E_H',E_H,'I_1H',I_1H,'I_2H',I_2H,'R_H',R_H,...
-    'S_V',S_V','E_1V',E_1V','E_2V',E_2V','E_3V',E_3V','I_V',I_V','G_V',G_V','P_V',P_V');
-
-%Gets the reporting rate u, based on whether passive screening has changed
-iRDT=min([find(Year==RDTyear) NumberScreenings+1]);
-uVector=[u*ones(1,iRDT-1) 1-RDTreporting*(1-u)*ones(1,NumberScreenings-iRDT+1)];
-
-%Calculate aggregate outputs 
-dNH=S_H+E_H+I_1H+I_2H+R_H;
-TotalN_H=sum(S_H(1:4,:)+E_H(1:4,:)+I_1H(1:4,:)+I_2H(1:4,:)+R_H(1:4,:));
-dNH(dNH==0)=1;
-
-k=bsxfun(@rdivide, dNH, dNH(1,:));
-f=bsxfun(@rdivide,repmat(s',1,length(t)).*k,sum(repmat(s',1,length(t)).*k));
-  
-%Initial value used below in assessing false positive reporting (active
-%screening)
-difference=100;
-
-if NumberScreenings>0
-    for i=1:NumberScreenings
-        
-        %New infections (influx into I_1H)
-        FOI=alph*I_V(T(i):T(i+1))'.*(meff(1:4)*(f(1:4,T(i):T(i+1)).*S_H(1:4,T(i):T(i+1))./dNH(1:4,T(i):T(i+1))));
-        NewInfections(i)=trapz(t(T(i):T(i+1)),FOI);   
-        
-        %Person years infected in S1 and S2
-        PersonYrs1(i)=trapz(t(T(i):T(i+1)),sum(I_1H(1:4,T(i):T(i+1)),1))/365;
-        PersonYrs2(i)=trapz(t(T(i):T(i+1)),sum(I_2H(1:4,T(i):T(i+1)),1))/365;
-
-        %Active screening detections (S1/S2) each time interval
-        
-        %If there are more than 0.5 cases per 10,000 above the expect false
-        %+ves, or if it is before 2018
-        if difference>0.5 || Year(i)<2018 
-            ActInc(i)=( TruePos(i,:)*(E_H(:,T(i))+I_1H(:,T(i))+I_2H(:,T(i)))...
-                            + FalsePos(i,:)*(S_H(:,T(i))) )*(10000/TotalN_H(T(i))); %Here T(i) is timepoint just before active screen
-            
-            threshold=ActInc(i);
-
-            if NumberPeopleScreened(i)==0
-                difference=100;
-            else
-                difference=threshold-NumberPeopleScreened(i)*10/N_H;
-            end
-           
-            ActiveCases1(i) = TruePos(i,:)*(I_1H(:,T(i))) + FalsePos(i,:)*(S_H(:,T(i)));
-            ActiveCases2(i) = TruePos(i,:)*(I_2H(:,T(i))); %assume false positives are detected as stage 1 
-            
-        else
-            
-            %No false positives
-            ActiveCases1(i) = TruePos(i,:)*(I_1H(:,T(i)));
-            ActiveCases2(i) = TruePos(i,:)*(I_2H(:,T(i))); 
-                                
-        end
-
-
-        %Passive detections (S1/S2) each time interval
-        PassiveCases1(i) = yearlyeta_H(i,1)*trapz(t(T(i):T(i+1)),sum(I_1H(1:4,T(i):T(i+1))));
-        PassiveCases2(i) = uVector(i)*yearlygamma_H(i,1)*trapz(t(T(i):T(i+1)),sum(I_2H(1:4,T(i):T(i+1))));
-
-        %Deaths
-        Deaths(i)= (1-uVector(i))*yearlygamma_H(i,1)*trapz(t(T(i):T(i+1)),sum(I_2H(1:4,T(i):T(i+1))));
+    % Output
+    % All timepoints
+    Classes = array2table([double(Data.ModelScreeningTime(1)) + T / 365 Pop], ...
+        'VariableNames', {'Time',  'S_H1',  'S_H2',  'S_H3',  'S_H4',  'S_A',  'E_H1',  'E_H2',  'E_H3',  'E_H4',  'E_A', ...
+        'I1_H1',  'I1_H2',  'I1_H3',  'I1_H4',  'I1_A',  'I2_H1',  'I2_H2',  'I2_H3',  'I2_H4',  'I2_A', ...
+        'R_H1',  'R_H2',  'R_H3',  'R_H4',  'R_A', ...
+        'P_V',  'S_V',  'G_V',  'E1_V',  'E2_V',  'E3_V',  'I_V'});
+    %Y
+    for y = 1:Y%length(Data.Years)% Y-1
+        s = find(floor(double(Data.ModelScreeningTime)) == Data.Years(y));
+        ActiveM1(y) = sum(Active1(s));
+        ActiveM2(y) = sum(Active2(s));
+        PassiveM1(y) = sum(Passive1(s));
+        PassiveM2(y) = sum(Passive2(s));
+        DeathsM(y) = sum(Deaths(s));
+        PersonYrsM1(y) = sum(PersonYrs1(s));
+        PersonYrsM2(y) = sum(PersonYrs2(s));
+        NewInfM(y) = sum(NewInf(s));
+        PerfectSpec(y) = mean(Spec(s));
     end
-end
 
+    Aggregate = table(Data.Years', ActiveM1', ActiveM2', PassiveM1', PassiveM2', DeathsM', PersonYrsM1', PersonYrsM2', NewInfM', NoInfHost', PerfectSpec', ...
+        'VariableNames', {'Year',  'ActiveM1',  'ActiveM2',  'PassiveM1',  'PassiveM2',  'DeathsM',  'PersonYrsM1',  'PersonYrsM2',  'NewInfM',  'NoInfHost',  'PerfectSpec'});
+    %Aggregate = struct('Year', Data.Year, 'ActiveM1', ActiveM1, 'ActiveM2', ActiveM2, 'PassiveM1', PassiveM1, 'PassiveM2',PassiveM2, 'DeathsM', DeathsM,...
+    %                   'PersonYrsM1', PersonYrsM1, 'PersonYrsM2', PersonYrsM2, 'NewInfM', NewInfM);
 
-Aggregate=struct('YearM',(t(T(1:end-1))'-MaxTime)./365+Year(1),'TruePos',TruePos','FalsePos',FalsePos',...
-    'ActiveCases1',ActiveCases1,'ActiveCases2',ActiveCases2,'PassiveCases1',PassiveCases1,'PassiveCases2',PassiveCases2,...
-    'Deaths',Deaths,'PersonYrs1',PersonYrs1,'PersonYrs2',PersonYrs2,'NewInfections',NewInfections);
+    % Main ODE code
+    function dPop = diffHATmodel(t, pop, parameter)
+        %%% NO VC
+        %Compute vector reduction function
+        %f_T = parameter.p_targetdie * (1 - sigmf(mod(t,365/parameter.TargetFreq),[25/365 0.35*365]));
+        % if parameter.p_targetdie==0
+        %     f_T = 0;
+        % else
+        %     f_T = parameter.p_targetdie * (1 - 1/(1+exp(-25/365*(mod(t,365/parameter.TargetFreq)-0.35*365))));
+        % end
 
+        f_T = 0;
 
-%Main ODE code
+        %Get populations from inputs
+        S_H = pop(1:5); E_H = pop(6:10); I1_H = pop(11:15); I2_H = pop(16:20); R_H = pop(21:25);
+        P_V = pop(26); S_V = pop(27); G_V = pop(28); E1_V = pop(29); E2_V = pop(30); E3_V = pop(31); I_V = pop(32);
 
+        N_H = S_H + E_H + I1_H + I2_H + R_H;
+        N_V = S_V + G_V + E1_V + E2_V + E3_V + I_V;
 
-function dPop=diffHATmodel(t,pop, parameter)
+        dNH = N_H;
+        dNH(N_H == 0) = 1;
 
-%Assign parameters (transform row vectors to column vectors)
-x       =parameter(1);
-mu_H    =parameter(2:1+x)';
-gamma_H =parameter(2+x:1+2*x)';
-sigma_H =parameter(2+2*x:1+3*x)';
-eta_H   =parameter(2+3*x:1+4*x)';
-omega_H =parameter(2+4*x:1+5*x)';
-phi_H   =parameter(2+5*x:1+6*x)';
-meff    =parameter(2+6*x:1+7*x)';
-epsilon =parameter(2+7*x);
-sigma_V =parameter(3+7*x);
-mu_V    =parameter(4+7*x);
-alph    =parameter(5+7*x);
-p_V     =parameter(6+7*x);
-s       =parameter(7+7*x:6+8*x)';
-B_V     =parameter(7+8*x);
-xi_V    =parameter(8+8*x);
-K_V     =parameter(9+8*x);
-p_targetdie =parameter(10+8*x);
-p_survivePV =parameter(11+8*x);
-targetdeploy =parameter(12+8*x);
+        %Human infection dynamics
+        dS_H = parameter.mu_H .* N_H + parameter.omega_H .* R_H - I_V * parameter.alpha * parameter.meff .* parameter.f .* S_H ./ dNH - parameter.mu_H .* S_H;
+        dE_H = I_V * parameter.alpha * parameter.meff .* parameter.f .* S_H ./ dNH - (parameter.sigma_H + parameter.mu_H) .* E_H;
+        dI1_H = parameter.sigma_H .* E_H - (parameter.eta_H + parameter.phi_H + parameter.mu_H) .* I1_H;
+        dI2_H = parameter.phi_H .* I1_H - (parameter.gamma_H + parameter.mu_H) .* I2_H;
+        dR_H = parameter.eta_H .* I1_H + parameter.gamma_H .* I2_H - (parameter.omega_H + parameter.mu_H) .* R_H;
 
-%Compute vector reduction function
-if p_targetdie~=0
-    f_T= p_targetdie*(1 - sigmf(mod(t,365/targetdeploy),[25/365 0.35*365]));
-else
-    f_T=0;
-end
+        %Tsetse Infection dynamics
+        %Pupa
+        dP_V = parameter.B_V * N_V - (parameter.xi_V + P_V / parameter.K_V) * P_V;
+        %Teneral
+        dS_V = parameter.xi_V * parameter.p_survive * P_V - parameter.alpha * S_V - parameter.mu_V * S_V;
+        %Non-teneral
+        dG_V = parameter.alpha * (1 - f_T) * (1 - sum(parameter.f .* (I1_H + I2_H) ./ dNH) * parameter.p_V) * S_V - parameter.alpha * ((1 - f_T) * parameter.epsilon * sum(parameter.f .* (I1_H + I2_H) ./ dNH) * parameter.p_V + f_T) * G_V - parameter.mu_V * G_V;
+        %Exposed
+        dE1_V = parameter.alpha * (1 - f_T) * sum(parameter.f .* (I1_H + I2_H) ./ dNH) * parameter.p_V * (S_V + parameter.epsilon * G_V) - 3 * parameter.sigma_V * E1_V - (parameter.mu_V + parameter.alpha * f_T) * E1_V;
+        dE2_V = 3 * parameter.sigma_V * E1_V - (3 * parameter.sigma_V + parameter.mu_V + parameter.alpha * f_T) * E2_V;
+        dE3_V = 3 * parameter.sigma_V * E2_V - (3 * parameter.sigma_V + parameter.mu_V + parameter.alpha * f_T) * E3_V;
+        %Infected
+        dI_V = 3 * parameter.sigma_V * E3_V - (parameter.mu_V + parameter.alpha * f_T) * I_V;
 
-%Get populations from inputs
-S_H=pop(1:x); E_H=pop(x+1:2*x); I_1H=pop(2*x+1:3*x); I_2H=pop(3*x+1:4*x);R_H=pop(4*x+1:5*x);
-S_V=pop(5*x+1); E_1V=pop(5*x+2); E_2V=pop(5*x+3); E_3V=pop(5*x+4); I_V=pop(5*x+5); G_V=pop(5*x+6); P_V=pop(5*x+7);
-
-N_H=S_H+E_H+I_1H+I_2H+R_H;
-N_V=S_V+E_1V+E_2V+E_3V+I_V+G_V;
-
-k=N_H./N_H(1);
-f=(s.*k)/sum(s.*k);
-
-dNH=N_H; dNH(N_H==0)=1;
-
-
-%Human infection dynamics 
-dS_H= mu_H.*N_H + omega_H.*R_H - I_V*alph*meff.*f.*S_H./dNH - mu_H.*S_H;
-dE_H= I_V*alph*meff.*f.*S_H./dNH - (sigma_H + mu_H).*E_H;
-dI_1H= sigma_H.*E_H - (eta_H + phi_H + mu_H).*I_1H;
-dI_2H= phi_H.*I_1H -  (gamma_H + mu_H).*I_2H;
-dR_H =  eta_H.*I_1H + gamma_H.*I_2H - (omega_H + mu_H).*R_H;
-
-%Tsetse Infection dynamics
-%Pupa
-dP_V=B_V*N_V - (xi_V + P_V/K_V)*P_V;
-%Teneral
-dS_V= xi_V*p_survivePV*P_V  - alph*S_V - mu_V*S_V;
-%Non-teneral
-dG_V= alph*(1-f_T)*(1-sum(f.*(I_1H+I_2H)./dNH)*p_V)*S_V - alph*((1-f_T)*epsilon*(sum(f.*(I_1H+I_2H)./dNH)*p_V) + f_T)*G_V - mu_V*G_V;
-%Exposed
-dE_1V= alph*(1-f_T)*(sum(f.*(I_1H+I_2H)./dNH)*p_V)*(S_V+epsilon*G_V) - 3*sigma_V*E_1V - (mu_V + alph*f_T)*E_1V;
-dE_2V= 3*sigma_V*E_1V  - (3*sigma_V + mu_V + alph*f_T)*E_2V;
-dE_3V= 3*sigma_V*E_2V  - (3*sigma_V + mu_V + alph*f_T)*E_3V;
-%Infected
-dI_V= 3*sigma_V*E_3V  -  (mu_V + alph*f_T)*I_V;
-
-
-dPop=[dS_H; dE_H; dI_1H; dI_2H; dR_H; dS_V; dE_1V; dE_2V; dE_3V; dI_V; dG_V; dP_V];
-
-
+        dPop = [dS_H; dE_H; dI1_H; dI2_H; dR_H; dP_V; dS_V; dG_V; dE1_V; dE2_V; dE3_V; dI_V];
