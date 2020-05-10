@@ -1,75 +1,30 @@
 import matplotlib.pyplot as plt
 import numpy as np
-import csv
+import pandas as pd
 import os
 
-read_from = "/home/rfox/PhD/RSG_FurtherWork_Data/YasaBonga/Constant_Screening/Deterministic"
 
-alg = "RDT1_SD+QBC+CATT_16_Dilution"
+output_dir = os.path.join(os.path.normpath(
+    os.getcwd() + os.sep + os.pardir), "Output_Data/")
 
+iter_info = pd.read_csv(output_dir+"Iter_Info.csv")
 
+result_dir = os.path.join(output_dir, iter_info.Health_Zones[0], "Posterior_"+str(int(
+    iter_info.Kwamouth_PostIDs[0])), "Constant_Screening/StochRun#1/CATT_wb+CTC+CATT_4_Dilution/")
 
+# result_dir = os.path.join(output_dir, iter_info.Health_Zones[0], "Posterior_"+str(int(
+#     iter_info.Kwamouth_PostIDs[0])), "Constant_Screening", "StochRun#1", "CATT_wb+CTC+CATT_4_Dilution", "StochRun#1/")
 
-names =  ["Aggregate", "Class", "Intervention"]
-for name in names:
-    with open(os.getcwd()+"/"+name+'_Names.csv', 'r') as file:
-        reader = csv.reader(file)
-        for row in reader:
-            # print(row[0]) # hack to copy variable names from terminal
-            with open(read_from+"/"+name+"/"+row[0]+"/"+alg+".csv", 'r') as file:
-                exec(row[0]+" = []")
-                data = csv.reader(file)
-                for datapoint in data:
-                    exec(row[0]+".append(datapoint)")
+Classes = pd.read_csv(result_dir+"Classes.csv")
+Aggregate = pd.read_csv(result_dir+"Aggregate.csv")
 
-# YearM
-# TruePos
-# FalsePos
-# ActiveCases1
-# ActiveCases2
-# PassiveCases1
-# PassiveCases2
-# Deaths
-# PersonYrs1
-# PersonYrs2
-# NewInfections
-# tYear
-# tIntervention
-# S_H
-# E_H
-# I_1H
-# I_2H
-# R_H
-# S_V
-# E_1V
-# E_2V
-# E_3V
-# I_V
-# G_V
-# P_V
-# N_H
-# Year
-# NumberPeopleScreened
-# Frequency
-# d_amp
-# d_steep
-# d_change
-# RDTyear
-# RDTincrease
-# RDTreporting
-# VCyear
-# VCreduction
-# targetdeploy
-# ReductionMeasured
-# ScreenChangeYear
-# ScreenChangeType
-# scrname
-
-print(sum(I_1H[0]))
+plt.plot(Classes.Time, sum(
+    [Classes.I1_H1, Classes.I1_H4, Classes.I2_H1, Classes.I2_H4]))
 
 
+#######################################################################
 
-#Continuous human disease dynamics
+# Continuous human disease dynamics
 
 # plt.plot( tYear, sum(I_1H[1:4]), legend=(['Stage I','Stage II','Hospital']), xlabel= 'Year' )
 
@@ -79,18 +34,18 @@ print(sum(I_1H[0]))
 # plt.plot(tYear, np.ones(1,lengtH[tYear])*(1/N_H))
 # plt.plot(tYear, np.ones(1,lengtH[tYear]))
 
-#, ylabel= 'Number of humans', xlims=([Year[0], Year[-1]+1])
+# , ylabel= 'Number of humans', xlims=([Year[0], Year[-1]+1])
 
 # oldx=xlim
 # oldy=ylim
 # plt.plot(RDTyear*np.ones(1,11),[0:oldy(2)/10:oldy(2)])
 
-#plt.plots active, passive and total incidence
-#subplt.plot(3,1,2)
+# plt.plots active, passive and total incidence
+# subplt.plot(3,1,2)
 # figure(hz*1000+scr*100+itr*10+1)
 # hold on
 # tYear_plt.plot=[YearM(1) reshape(repmat(YearM(2:end), 2,1),1,[]) floor(YearM(end))+1];
-# plt.plot(tYear_plt.plot,[ reshape(repmat(ActiveCases1+ActiveCases2, 2,1),1,[])],'Color','r'); 
+# plt.plot(tYear_plt.plot,[ reshape(repmat(ActiveCases1+ActiveCases2, 2,1),1,[])],'Color','r');
 # plt.plot(tYear_plt.plot,[  reshape(repmat(PassiveCases1+PassiveCases2, 2,1),1,[])],'Color','b');
 # plt.plot(tYear_plt.plot,[ reshape(repmat(ActiveCases1+ActiveCases2+PassiveCases1+PassiveCases2, 2,1),1,[])],'Color','k');
 # plt.plot(tYear_plt.plot,[  reshape(repmat(NewInfections, 2,1),1,[])],'Color',[0 0.7 0]);
@@ -108,7 +63,7 @@ print(sum(I_1H[0]))
 # #Vector infection dynamics
 # #subplt.plot(3,1,3)
 # # figure(1*10+2)
-# # hold on 
+# # hold on
 # # N_V=S_V+E_1V+E_2V+E_3V+I_V+G_V;
 # # h=plt.plot(tYear,100*(E_1V+E_2V+E_3V)./N_V,'Color',[1 0.55 0]);
 # # h=plt.plot(tYear,100*I_V./N_V,'Color','r');
@@ -123,12 +78,11 @@ print(sum(I_1H[0]))
 # # legend('Exposed','Infectious')
 
 
-
 # #Staging
 # # figure(1*10+3)
 # # clf
 # # tYear_plt.plotD=[intervention.Year(1) reshape(repmat(intervention.Year(2:end), 2,1),1,[]) floor(intervention.Year(end))+1];
-# # 
+# #
 # # hold on
 # # h=plt.plot(tYear_plt.plot,[ reshape(repmat(100*ActiveCases1./(ActiveCases1+ActiveCases2), 2,1),1,[])],'Color','r');
 # # plt.plot(tYear_plt.plotD,[ reshape(repmat(100*intervention.ActiveD1./(intervention.ActiveD1+intervention.ActiveD2), 2,1),1,[])],'Color','k');

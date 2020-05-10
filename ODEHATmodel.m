@@ -27,7 +27,7 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 function [Classes, Aggregate] = ODEHATmodel(meff, ICs, Data, Paras, ProjStrat)
-    [S_H, E_H, I_1H, I_2H, R_H, S_A, E_A, I_A, P_V, S_V, G_V, E_1V, E_2V, E_3V, I_V] = ICs{:};
+    [S_H, E_H, I1_H, I2_H, R_H, S_A, E_A, I_A, P_V, S_V, G_V, E1_V, E2_V, E3_V, I_V] = ICs{:};
 
     k4 = 1 - Paras.k1 - Paras.k2 - Paras.k3;
     N_A = Data.N_H * Paras.k_A;
@@ -51,81 +51,74 @@ function [Classes, Aggregate] = ODEHATmodel(meff, ICs, Data, Paras, ProjStrat)
     TurnOut3 = zeros(1, NumberScreening); % non-participating
     TurnOut4 = TurnOut3; % non-participating
 
-    %%% Old code doesn't run improved active screening, so skipping for now
-    %%% as have not handled the Stategy input data
+    % New AS strategy is inctorduced
+    if Data.ModelScreeningTime(1) < ProjStrat.NewASyear && ProjStrat.NewASyear < Data.ModelScreeningTime(end)
+        Y = find(Data.ModelScreeningTime == ProjStrat.NewASyear);
 
-    %     % New AS strategy is inctorduced
-    %     if Data.ModelScreeningTime(1) < ProjStrat.NewASyear && ProjStrat.NewASyear < Data.ModelScreeningTime(end)
-    %         Y = find(Data.ModelScreeningTime == ProjStrat.NewASyear);
-    %
-    %         switch ProjStrat.NewASstrat
-    %         case 'equal' % door-to-door (all populations get equal probability to be screened)
-    %             TurnOut1(Y:end) = Data.ModelPeopleScreened(Y:end) / Data.N_H;
-    %             TurnOut2(Y:end) = TurnOut1(Y:end);
-    %             TurnOut3(Y:end) = TurnOut1(Y:end);
-    %             TurnOut4(Y:end) = TurnOut1(Y:end);
-    %         case 'high' % work place screening (k4 group gets screened first and then equally screened Paras.k1 and Paras.k2)
-    %             TurnOut4(Y:end) = min(Data.ModelPeopleScreened(Y:end) / Data.N_H / k4, 1);
-    %             TurnOut1(Y:end) = max((Data.ModelPeopleScreened(Y:end) / Data.N_H - k4) / (Paras.k1 + Paras.k2), 0);
-    %             TurnOut2(Y:end) = TurnOut1(Y:end);
-    %         end
-    %     end
+        switch ProjStrat.NewASstrat
+            case 'equal'% door-to-door (all populations get equal probability to be screened)
+                TurnOut1(Y:end) = Data.ModelPeopleScreened(Y:end) / Data.N_H;
+                TurnOut2(Y:end) = TurnOut1(Y:end);
+                TurnOut3(Y:end) = TurnOut1(Y:end);
+                TurnOut4(Y:end) = TurnOut1(Y:end);
+            case 'high'% work place screening (k4 group gets screened first and then equally screened Paras.k1 and Paras.k2)
+                TurnOut4(Y:end) = min(Data.ModelPeopleScreened(Y:end) / Data.N_H / k4, 1);
+                TurnOut1(Y:end) = max((Data.ModelPeopleScreened(Y:end) / Data.N_H - k4) / (Paras.k1 + Paras.k2), 0);
+                TurnOut2(Y:end) = TurnOut1(Y:end);
+        end
+
+    end
+
     TurnOut = [TurnOut1; TurnOut2; TurnOut3; TurnOut4];
 
     % Specificity by screening
     ScreeningSpecificity = repmat(Paras.specificity, 1, NumberScreening);
     % Lower specificity can exist in some years (eg MSF interventions in
-    % Ango and Ganga HZ of Orientale former province).
-
-    altSpec = find(Data.ModelScreeningTime <= 0); %again hard coded as all the same
-    ScreeningSpecificity(altSpec) = ScreeningSpecificity(altSpec) * Paras.b_specificity;
-
-    % Also change sensitivity
+    % % Ango and Ganga HZ of Orientale former province).
+    % altSpec = find(Data.ModelScreeningTime <= Paras.Last_year);
+    % ScreeningSpecificity(altSpec) = ScreeningSpecificity(altSpec) * Paras.b_specificity;
+    % % Also change sensitivity
     ScreeningSensitivity = repmat(Paras.Sensitivity, 1, NumberScreening);
-    ScreeningSensitivity(altSpec) = Paras.SensitivityMSF;
+    % ScreeningSensitivity(altSpec) = Paras.SensitivityMSF;
 
-    %%% hard coded to use for all years
+    % Passive screening: move Infected (I1 and I2) to Recovery continuously
+    if Data.ModelScreeningTime(1) < ProjStrat.RDTyear && ProjStrat.RDTyear < Data.ModelScreeningTime(end)
+        Y = find(Data.ModelScreeningTime == ProjStrat.RDTyear);
+    else
+        Y = length(Data.ModelScreeningTime) + 1;
+    end
 
-    %     % Passive screening: move Infected (I1 and I2) to Recovery continuously
-    %     if Data.ModelScreeningTime(1) < ProjStrat.RDTyear && ProjStrat.RDTyear < Data.ModelScreeningTime(end)
-    %         Y = find(Data.ModelScreeningTime == ProjStrat.RDTyear);
-    %     else
-    %         Y = length(Data.ModelScreeningTime) + 1;
-    %     end
-    %     yearlyeta_H = [(1 + Paras.eta_H_amp ./ (1 + exp(-Paras.d_steep * (double(Data.ModelScreeningTime(1:Y-1)) - (Paras.d_change+Paras.eta_H_lag))))) * Paras.eta_H,...
-    %                    (1 + ProjStrat.RDTincrease) * (1 + Paras.eta_H_amp ./ (1 + exp(-Paras.d_steep * (double(Data.ModelScreeningTime(Y-1)) - (Paras.d_change+Paras.eta_H_lag))))) * Paras.eta_H * ones(1, NumberScreening - (Y-1))];
-    %     yearlygamma_H = [(1 + Paras.gamma_H_amp ./ (1 + exp(-Paras.d_steep * (double(Data.ModelScreeningTime(1:Y-1)) - Paras.d_change)))) * Paras.gamma_H,...
-    %                    (1 + ProjStrat.RDTincrease) * (1 + Paras.gamma_H_amp ./ (1 + exp(-Paras.d_steep * (double(Data.ModelScreeningTime(Y-1)) - Paras.d_change)))) * Paras.gamma_H * ones(1, NumberScreening - (Y-1))];
+    yearlyeta_H = [(1 + Paras.eta_H_amp ./ (1 + exp(-Paras.d_steep * (double(Data.ModelScreeningTime(1:Y - 1)) - (Paras.d_change + Paras.eta_H_lag))))) * Paras.eta_H, ...
+                    (1 + ProjStrat.RDTincrease) * (1 + Paras.eta_H_amp ./ (1 + exp(-Paras.d_steep * (double(Data.ModelScreeningTime(Y - 1)) - (Paras.d_change + Paras.eta_H_lag))))) * Paras.eta_H * ones(1, NumberScreening - (Y - 1))];
+    yearlygamma_H = [(1 + Paras.gamma_H_amp ./ (1 + exp(-Paras.d_steep * (double(Data.ModelScreeningTime(1:Y - 1)) - Paras.d_change)))) * Paras.gamma_H, ...
+                    (1 + ProjStrat.RDTincrease) * (1 + Paras.gamma_H_amp ./ (1 + exp(-Paras.d_steep * (double(Data.ModelScreeningTime(Y - 1)) - Paras.d_change)))) * Paras.gamma_H * ones(1, NumberScreening - (Y - 1))];
 
-    yearlyeta_H = (1 + Paras.eta_H_amp ./ (1 + exp(-Paras.d_steep * (double(Data.ModelScreeningTime) - (Paras.d_change + Paras.eta_H_lag))))) * Paras.eta_H;
-    yearlygamma_H = (1 + Paras.gamma_H_amp ./ (1 + exp(-Paras.d_steep * (double(Data.ModelScreeningTime) - Paras.d_change)))) * Paras.gamma_H;
-
-    %     if Data.ModelScreeningTime(1) == ProjStrat.RDTyear
-    %         yearlyeta_H = (1 + ProjStrat.RDTincrease) * (1 + Paras.eta_H_amp ./ (1 + exp(-Paras.d_steep * (double(Data.ModelScreeningTime(1) - 1) - (Paras.d_change+Paras.eta_H_lag))))) * Paras.eta_H * ones(1, NumberScreening);
-    %         yearlygamma_H = (1 + ProjStrat.RDTincrease) * (1 + Paras.gamma_H_amp ./ (1 + exp(-Paras.d_steep * (double(Data.ModelScreeningTime(1) - 1) - Paras.d_change)))) * Paras.gamma_H * ones(1, NumberScreening);
-    %     end
+    if Data.ModelScreeningTime(1) == ProjStrat.RDTyear
+        yearlyeta_H = (1 + ProjStrat.RDTincrease) * (1 + Paras.eta_H_amp ./ (1 + exp(-Paras.d_steep * (double(Data.ModelScreeningTime(1) - 1) - (Paras.d_change + Paras.eta_H_lag))))) * Paras.eta_H * ones(1, NumberScreening);
+        yearlygamma_H = (1 + ProjStrat.RDTincrease) * (1 + Paras.gamma_H_amp ./ (1 + exp(-Paras.d_steep * (double(Data.ModelScreeningTime(1) - 1) - Paras.d_change)))) * Paras.gamma_H * ones(1, NumberScreening);
+    end
 
     % calculate yearly uVector maintaining a constant death rate
     death_rate = (1 - Paras.u) * Paras.gamma_H;
     uVector = 1 - death_rate ./ yearlygamma_H;
 
-    %%% Nor do we want VC even if Strategy data is handled
+    % Vector control
+    p_targetdie(1:NumberScreening + 1) = 0;
+    TargetFreq(1:NumberScreening + 1) = 1;
 
-    %     % Vector control
-    %     p_targetdie(1 : NumberScreening+1) = 0;
-    %     TargetFreq(1 : NumberScreening+1) = 1;
-    %     if Paras.VCstart ~= 0
-    %         Y1 = find(Data.ModelScreeningTime >= Paras.VCstart, 1);
-    %         p_targetdie(Y1:end) = Paras.TargetDie;
-    %         TargetFreq(Y1:end) = Paras.TargetFreq;
-    %     end
-    %     if ProjStrat.NewVCyear ~= 0
-    %         Y2 = find(Data.ModelScreeningTime >= ProjStrat.NewVCyear, 1);
-    %         p_targetdie(Y2:end) = ProjStrat.NewTargetDie;
-    %         TargetFreq(Y2:end) = ProjStrat.NewTargetFreq;
-    %     end
+    if Paras.VCstart ~= 0
+        Y1 = find(Data.ModelScreeningTime >= Paras.VCstart, 1);
+        p_targetdie(Y1:end) = Paras.TargetDie;
+        TargetFreq(Y1:end) = Paras.TargetFreq;
+    end
 
-    Pop = [S_H S_A E_H E_A I1_H I_A I2_H 0 R_H 0 P_V S_V G_V E1_V E2_V E3_V I_V];
+    if ProjStrat.NewVCyear ~= 0
+        Y2 = find(Data.ModelScreeningTime >= ProjStrat.NewVCyear, 1);
+        p_targetdie(Y2:end) = ProjStrat.NewTargetDie;
+        TargetFreq(Y2:end) = ProjStrat.NewTargetFreq;
+    end
+
+    Pop = [S_H(1:4) S_A E_H(1:4) E_A I1_H(1:4) I_A I2_H(1:4) 0 R_H(1:4) 0 P_V S_V G_V E1_V E2_V E3_V I_V];
     T = 0;
 
     Data.ModelScreeningTime = [Data.ModelScreeningTime Data.ModelScreeningTime(end) + 1];
@@ -153,12 +146,12 @@ function [Classes, Aggregate] = ODEHATmodel(meff, ICs, Data, Paras, ProjStrat)
         end
 
         Spec(s) = ScreeningSpecificity(s) == 1;
-        Active1(s) = I1_H(end, :) * TruePos + S_H(end, :) * FalsePos;
-        Active2(s) = I2_H(end, :) * TruePos; %assume false positives are detected as stage 1
+        Active1(s) = I1_H(end, 1:4) * TruePos + S_H(end, 1:4) * FalsePos;
+        Active2(s) = I2_H(end, 1:4) * TruePos; %assume false positives are detected as stage 1
 
         % Dynamics
         DandT = TurnOut(:, s)' * ScreeningSensitivity(s) * Paras.Compliance; % proportional change in different HUMAN group
-        ICs = [S_H(end, :) Pop(end, 5) E_H(end, :) .* (1 - DandT) Pop(end, 10) I1_H(end, :) .* (1 - DandT) Pop(end, 15) I2_H(end, :) .* (1 - DandT) Pop(end, 20) R_H(end, :) + (E_H(end, :) + I1_H(end, :) + I2_H(end, :)) .* DandT Pop(end, 25:32)];
+        ICs = [S_H(end, 1:4), Pop(end, 5), E_H(end, 1:4) .* (1 - DandT), Pop(end, 10), I1_H(end, 1:4) .* (1 - DandT) Pop(end, 15) I2_H(end, 1:4) .* (1 - DandT) Pop(end, 20) R_H(end, 1:4) + (E_H(end, 1:4) + I1_H(end, 1:4) + I2_H(end, 1:4)) .* DandT Pop(end, 25:32)];
 
         parameter = Paras;
         parameter.f = f';
@@ -171,30 +164,24 @@ function [Classes, Aggregate] = ODEHATmodel(meff, ICs, Data, Paras, ProjStrat)
 
         parameter.gamma_H = [yearlygamma_H(s) * ones(1, 4) Paras.gamma_A]';
         parameter.eta_H = [yearlyeta_H(s) * ones(1, 4) Paras.eta_A]';
+        parameter.p_targetdie = p_targetdie(s);
+        parameter.TargetFreq = TargetFreq(s);
 
-        % NO VC
+        if (Data.ModelScreeningTime(s) < Paras.VCstart && Paras.VCstart < Data.ModelScreeningTime(s + 1)) || (Data.ModelScreeningTime(s) < ProjStrat.NewVCyear && ProjStrat.NewVCyear < Data.ModelScreeningTime(s + 1))
+            Tbreak = 365 * min(abs(Paras.VCstart - double(Data.ModelScreeningTime(s))), abs(ProjStrat.NewVCyear - double(Data.ModelScreeningTime(s))));
+            [t1, pop1] = ode45(@diffHATmodel, [sum(Data.ModelScreeningFreq(1:s - 1)) sum(Data.ModelScreeningFreq(1:s - 1)) + Tbreak], ICs, [], parameter);
 
-        % parameter.p_targetdie = p_targetdie(s);
-        %parameter.TargetFreq = TargetFreq(s);
+            %update VC
+            parameter.p_targetdie = p_targetdie(s + 1);
+            parameter.TargetFreq = TargetFreq(s + 1);
+            [t2, pop2] = ode45(@diffHATmodel, [sum(Data.ModelScreeningFreq(1:s - 1)) + Tbreak sum(Data.ModelScreeningFreq(1:s))], pop1(end, :), [], parameter);
 
-        %         if (Data.ModelScreeningTime(s) < Paras.VCstart && Paras.VCstart < Data.ModelScreeningTime(s+1)) || (Data.ModelScreeningTime(s) < ProjStrat.NewVCyear && ProjStrat.NewVCyear < Data.ModelScreeningTime(s+1))
-        %             Tbreak = 365 * min(abs(Paras.VCstart - double(Data.ModelScreeningTime(s))), abs(ProjStrat.NewVCyear - double(Data.ModelScreeningTime(s))));
-        %             [t1, pop1] = ode45(@diffHATmodel, [sum(Data.ModelScreeningFreq(1 : s-1)) sum(Data.ModelScreeningFreq(1 : s-1)) + Tbreak], ICs, [], parameter);
-        %
-        %             %update VC
-        %             parameter.p_targetdie = p_targetdie(s+1);
-        %             parameter.TargetFreq = TargetFreq(s+1);
-        %             [t2, pop2] = ode45(@diffHATmodel, [sum(Data.ModelScreeningFreq(1 : s-1)) + Tbreak sum(Data.ModelScreeningFreq(1 : s))], pop1(end,:), [], parameter);
-        %
-        %             pop = [pop1; pop2(2:end,:)];
-        %             t = [t1; t2(2:end,:)];
-        %         else
-        %             [t, pop] = ode45(@diffHATmodel, [sum(Data.ModelScreeningFreq(1 : s-1)) sum(Data.ModelScreeningFreq(1 : s))], ICs, [], parameter);
-        %         end
+            pop = [pop1; pop2(2:end, :)];
+            t = [t1; t2(2:end, :)];
+        else
+            [t, pop] = ode45(@diffHATmodel, [sum(Data.ModelScreeningFreq(1:s - 1)) sum(Data.ModelScreeningFreq(1:s))], ICs, [], parameter);
+        end
 
-        [t, pop] = ode45(@diffHATmodel, [sum(Data.ModelScreeningFreq(1:s - 1)) sum(Data.ModelScreeningFreq(1:s))], ICs, [], parameter);
-        size(pop)
-        size(Pop)
         Pop = [Pop; pop];
         T = [T; t];
 
@@ -228,10 +215,10 @@ function [Classes, Aggregate] = ODEHATmodel(meff, ICs, Data, Paras, ProjStrat)
     % Output
     % All timepoints
     Classes = array2table([double(Data.ModelScreeningTime(1)) + T / 365 Pop], ...
-        'VariableNames', {'Time',  'S_H1',  'S_H2',  'S_H3',  'S_H4',  'S_A',  'E_H1',  'E_H2',  'E_H3',  'E_H4',  'E_A', ...
-        'I1_H1',  'I1_H2',  'I1_H3',  'I1_H4',  'I1_A',  'I2_H1',  'I2_H2',  'I2_H3',  'I2_H4',  'I2_A', ...
-        'R_H1',  'R_H2',  'R_H3',  'R_H4',  'R_A', ...
-        'P_V',  'S_V',  'G_V',  'E1_V',  'E2_V',  'E3_V',  'I_V'});
+        'VariableNames', {'Time', 'S_H1', 'S_H2', 'S_H3', 'S_H4', 'S_A', 'E_H1', 'E_H2', 'E_H3', 'E_H4', 'E_A', ...
+        'I1_H1', 'I1_H2', 'I1_H3', 'I1_H4', 'I1_A', 'I2_H1', 'I2_H2', 'I2_H3', 'I2_H4', 'I2_A', ...
+        'R_H1', 'R_H2', 'R_H3', 'R_H4', 'R_A', ...
+        'P_V', 'S_V', 'G_V', 'E1_V', 'E2_V', 'E3_V', 'I_V'});
     %Y
     for y = 1:Y%length(Data.Years)% Y-1
         s = find(floor(double(Data.ModelScreeningTime)) == Data.Years(y));
@@ -247,22 +234,20 @@ function [Classes, Aggregate] = ODEHATmodel(meff, ICs, Data, Paras, ProjStrat)
     end
 
     Aggregate = table(Data.Years', ActiveM1', ActiveM2', PassiveM1', PassiveM2', DeathsM', PersonYrsM1', PersonYrsM2', NewInfM', NoInfHost', PerfectSpec', ...
-        'VariableNames', {'Year',  'ActiveM1',  'ActiveM2',  'PassiveM1',  'PassiveM2',  'DeathsM',  'PersonYrsM1',  'PersonYrsM2',  'NewInfM',  'NoInfHost',  'PerfectSpec'});
+        'VariableNames', {'Year', 'ActiveM1', 'ActiveM2', 'PassiveM1', 'PassiveM2', 'DeathsM', 'PersonYrsM1', 'PersonYrsM2', 'NewInfM', 'NoInfHost', 'PerfectSpec'});
     %Aggregate = struct('Year', Data.Year, 'ActiveM1', ActiveM1, 'ActiveM2', ActiveM2, 'PassiveM1', PassiveM1, 'PassiveM2',PassiveM2, 'DeathsM', DeathsM,...
     %                   'PersonYrsM1', PersonYrsM1, 'PersonYrsM2', PersonYrsM2, 'NewInfM', NewInfM);
 
     % Main ODE code
     function dPop = diffHATmodel(t, pop, parameter)
-        %%% NO VC
+
         %Compute vector reduction function
         %f_T = parameter.p_targetdie * (1 - sigmf(mod(t,365/parameter.TargetFreq),[25/365 0.35*365]));
-        % if parameter.p_targetdie==0
-        %     f_T = 0;
-        % else
-        %     f_T = parameter.p_targetdie * (1 - 1/(1+exp(-25/365*(mod(t,365/parameter.TargetFreq)-0.35*365))));
-        % end
-
-        f_T = 0;
+        if parameter.p_targetdie == 0
+            f_T = 0;
+        else
+            f_T = parameter.p_targetdie * (1 - 1 / (1 + exp(-25/365 * (mod(t, 365 / parameter.TargetFreq) - 0.35 * 365))));
+        end
 
         %Get populations from inputs
         S_H = pop(1:5); E_H = pop(6:10); I1_H = pop(11:15); I2_H = pop(16:20); R_H = pop(21:25);

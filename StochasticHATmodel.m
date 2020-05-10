@@ -18,7 +18,7 @@
 %SEIIR host model with tau-leap stochastic dynamics, ODE vector model
 %(Runge-Kutta)
 
-function [Classes, Aggregate, Elim] = StochasticHATmodel(meff, ICs, Data, Paras, ~)
+function [Classes, Aggregate, Elim] = StochasticHATmodel(meff, ICs, Data, Paras, ProjStrat)
 
     Elim = struct();
 
@@ -129,21 +129,24 @@ function [Classes, Aggregate, Elim] = StochasticHATmodel(meff, ICs, Data, Paras,
     Active2 = [];
     FalseP = [];
 
+    %%% NEW VERSION
     %%% new sigmoidal eta and gamma rates
 
     Y = length(Data.ModelScreeningTime) + 1;
 
-    eta_H_logfunc = (1 + Paras.eta_H_amp ./ (1 + exp(-Paras.d_steep * (double(Data.ModelScreeningTime(1:Y - 1)) - (Paras.d_change + Paras.eta_H_lag)))));
-    gamma_H_logfunc = (1 + Paras.gamma_H_amp ./ (1 + exp(-Paras.d_steep * (double(Data.ModelScreeningTime(1:Y - 1)) - Paras.d_change))));
+    yearlyeta_H = [(1 + Paras.eta_H_amp ./ (1 + exp(-Paras.d_steep * (double(Data.ModelScreeningTime(1:Y - 1)) - (Paras.d_change + Paras.eta_H_lag))))) * Paras.eta_H, ...
+                    (1 + ProjStrat.RDTincrease) * (1 + Paras.eta_H_amp ./ (1 + exp(-Paras.d_steep * (double(Data.ModelScreeningTime(Y - 1)) - (Paras.d_change + Paras.eta_H_lag))))) * Paras.eta_H * ones(1, NumberScreenings - (Y - 1))];
+    yearlygamma_H = [(1 + Paras.gamma_H_amp ./ (1 + exp(-Paras.d_steep * (double(Data.ModelScreeningTime(1:Y - 1)) - Paras.d_change)))) * Paras.gamma_H, ...
+                    (1 + ProjStrat.RDTincrease) * (1 + Paras.gamma_H_amp ./ (1 + exp(-Paras.d_steep * (double(Data.ModelScreeningTime(Y - 1)) - Paras.d_change)))) * Paras.gamma_H * ones(1, NumberScreenings - (Y - 1))];
 
-    yearlyeta_H = eta_H_logfunc * Paras.eta_H;
-    yearlygamma_H = gamma_H_logfunc * Paras.gamma_H;
+    % calculate yearly uVector maintaining a constant death rate
+    death_rate = (1 - Paras.u) * Paras.gamma_H;
+    uVector = 1 - death_rate ./ yearlygamma_H;
 
     %Run all intervention years
     if NumberScreenings > 0
 
         for i = 1:NumberScreenings
-
             %%% NO RDT adjustment
 
             %Changes to passive detection
@@ -172,7 +175,6 @@ function [Classes, Aggregate, Elim] = StochasticHATmodel(meff, ICs, Data, Paras,
             %         yearlygamma_H(i,:)=gamma_H;
 
             %%% have put _A in non-resivior, index 6, as that is the assumption we are making here (as per included comments). However construction of bitepref (s) would indicate _A be in index 5 not 6
-
             parameter = Paras;
             parameter.f = f';
             parameter.meff = meff;
@@ -258,7 +260,7 @@ function [Classes, Aggregate, Elim] = StochasticHATmodel(meff, ICs, Data, Paras,
             end
 
             %Run Tau Leap
-            [t2, pop2, newTrans2, newPassive1v2, newPassive2v2] = TauLeapHATmodel(MaxTime + sum(Data.ModelScreeningFreq(1:i - 1)), MaxTime + sum(Data.ModelScreeningFreq(1:i)), tau, [S_H1 E_H1 (I_1H1 - DandT1') (I_2H1 - DandT2') (R_H1 + DandT1' + DandT2') S_V(end) E_1V(end) E_2V(end) E_3V(end) I_V(end) G_V(end) P_V(end)], parameter);
+            [t2, pop2, newTrans2, newPassive1v2, newPassive2v2] = TauLeapHATmodel(MaxTime + sum(Data.ModelScreeningFreq(1:i - 1)), MaxTime + sum(Data.ModelScreeningFreq(1:i)), tau, [S_H1 E_H1, (I_1H1 - DandT1') (I_2H1 - DandT2') (R_H1 + DandT1' + DandT2') S_V(end) E_1V(end) E_2V(end) E_3V(end) I_V(end) G_V(end) P_V(end)], parameter);
 
             T = [T; T(end) + length(t2)]; %Gives all the times when intervention occurs
 
@@ -292,28 +294,15 @@ function [Classes, Aggregate, Elim] = StochasticHATmodel(meff, ICs, Data, Paras,
     %Rearrange outputs
 
     %All timepoints
-    % Classes=struct('tYear',(t'-MaxTime)./365+double(Data.Years(1)),'tIntervention',T(1:end-1)','S_H',S_H','E_H',E_H','I_1H',I_1H','I_2H',I_2H','R_H',R_H',...
-    %     'S_V',S_V','E_1V',E_1V','E_2V',E_2V','E_3V',E_3V','I_V',I_V','G_V',G_V','P_V',P_V');
 
     Classes = table((t - MaxTime) ./ 365 + double(Data.Years(1)), S_H(:, 1), S_H(:, 2), S_H(:, 3), S_H(:, 4), zeros(size(S_H(:, 1))), ...
         E_H(:, 1), E_H(:, 2), E_H(:, 3), E_H(:, 4), zeros(size(S_H(:, 1))), I_1H(:, 1), I_1H(:, 2), I_1H(:, 3), I_1H(:, 4), zeros(size(S_H(:, 1))), ...
         I_2H(:, 1), I_2H(:, 2), I_2H(:, 3), I_2H(:, 4), zeros(size(S_H(:, 1))), R_H(:, 1), R_H(:, 2), R_H(:, 3), R_H(:, 4), zeros(size(S_H(:, 1))), ...
         P_V, S_V, G_V, E_1V, E_2V, E_3V, I_V, ...
-        'VariableNames', {'Time',  'S_H1',  'S_H2',  'S_H3',  'S_H4',  'S_A',  'E_H1',  'E_H2',  'E_H3',  'E_H4',  'E_A', ...
-        'I1_H1',  'I1_H2',  'I1_H3',  'I1_H4',  'I1_A',  'I2_H1',  'I2_H2',  'I2_H3',  'I2_H4',  'I2_A', ...
-        'R_H1',  'R_H2',  'R_H3',  'R_H4',  'R_A', ...
-        'P_V',  'S_V',  'G_V',  'E1_V',  'E2_V',  'E3_V',  'I_V'});
-
-    %%% NO RDT adjustment (gave warning of being unused anyway)
-    %Gets the reporting rate u, based on whether passive screening has changed
-    %iRDT=min([find(Year==RDTyear) NumberScreenings+1]);
-
-    %%% update to new ODEHAT version
-    % uVector=[u*ones(1,iRDT-1) 1-RDTreporting*(1-u)*ones(1,NumberScreenings-iRDT+1)];
-    %%% NEW VERSION
-    % calculate yearly uVector maintaining a constant death rate
-    death_rate = (1 - Paras.u) * Paras.gamma_H;
-    uVector = 1 - death_rate ./ yearlygamma_H;
+        'VariableNames', {'Time', 'S_H1', 'S_H2', 'S_H3', 'S_H4', 'S_A', 'E_H1', 'E_H2', 'E_H3', 'E_H4', 'E_A', ...
+        'I1_H1', 'I1_H2', 'I1_H3', 'I1_H4', 'I1_A', 'I2_H1', 'I2_H2', 'I2_H3', 'I2_H4', 'I2_A', ...
+        'R_H1', 'R_H2', 'R_H3', 'R_H4', 'R_A', ...
+        'P_V', 'S_V', 'G_V', 'E1_V', 'E2_V', 'E3_V', 'I_V'});
 
     Frequency = Data.ModelScreeningFreq;
 
@@ -343,8 +332,8 @@ function [Classes, Aggregate, Elim] = StochasticHATmodel(meff, ICs, Data, Paras,
 
     % Aggregate=struct('YearM',(t(T(1:end-1))'-MaxTime)./365+double(Data.Years(1)),'ActiveCases1',ActiveCases1,'ActiveCases2',ActiveCases2,'PassiveCases1',PassiveCases1,'PassiveCases2',PassiveCases2,...
     %     'Deaths',Deaths,'PersonYrs1',PersonYrs1,'PersonYrs2',PersonYrs2,'NewInfections',NewInfections);
-    Aggregate = table(Data.Years', ActiveCases1', ActiveCases2', PassiveCases1', PassiveCases2', Deaths', PersonYrs1', PersonYrs2', NewInfections', zeros(size(Deaths')), zeros(size(Deaths')), ...
-        'VariableNames', {'Year',  'ActiveM1',  'ActiveM2',  'PassiveM1',  'PassiveM2',  'DeathsM',  'PersonYrsM1',  'PersonYrsM2',  'NewInfM',  'NoInfHost',  'PerfectSpec'});
+    Aggregate = table(Data.Years', Data.N_H_Scaled', ActiveCases1', ActiveCases2', PassiveCases1', PassiveCases2', Deaths', PersonYrs1', PersonYrs2', NewInfections', zeros(size(Deaths')), zeros(size(Deaths')), ...
+        'VariableNames', {'Year', 'ScaledN_H' 'ActiveM1', 'ActiveM2', 'PassiveM1', 'PassiveM2', 'DeathsM', 'PersonYrsM1', 'PersonYrsM2', 'NewInfM', 'NoInfHost', 'PerfectSpec'});
 
     %Find elimination years (Last transmission to humans, last reported human case, last
     %human infection)
@@ -415,130 +404,6 @@ function [Classes, Aggregate, Elim] = StochasticHATmodel(meff, ICs, Data, Paras,
     Elim.Trans = TransElimYear;
     Elim.Report = ReportElimYear;
     Elim.Inf = InfElimYear;
-
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    % Plots figures of (1) tsetse population dynamics and (2) Infection
-    % dynamics in humans, animals and vectors with corresponding case reporting
-
-    % figure(1)
-    % clf
-
-    % NV = S_V + E_1V + E_2V + E_3V + I_V + G_V;
-
-    % YearD = Data.Years;
-    % tYear_plot = [Data.Years(1) reshape(repmat(Data.Years(2:end), 2, 1), 1, []) floor(Data.Years(end)) + 1];
-
-    % plot(tYear, 100 * NV ./ NV(1), tYear, 40 * ones(1, length(tYear)), tYear, 10 * ones(1, length(tYear)), tYear, ones(1, length(tYear)))
-    % hold on
-
-    % %%% NO VC
-
-    % % plot(VCyear * ones(1, 11), [0:10:100], '--k')
-    % axis([YearD(1) - 1 YearD(end) + 1 0 inf])
-    % xlabel('Year')
-    % ylabel('Remaining tsetse population (%)')
-    % legend('tsetse dynamics',  '60% reduction',  '90% reduction',  '99% reduction',  'VC start',  'location',  'west')
-
-    % %%%%%%%%%%
-    % figure(2)
-    % %clf;
-    % %Human dynamics
-    % subplot(4, 1, 1)
-    % hold on
-    % h1 = plot(tYear, sum(I_1H(:, 1:4), 2)',  'Color', [1 0.55 0]);
-    % h2 = plot(tYear, sum(I_2H(:, 1:4), 2)',  '-r');
-    % h3 = plot(tYear, sum(R_H(:, 1:4), 2)',  '-b');
-    % h4 = plot(tYear, sum(I_1H(:, 1:4) + I_2H(:, 1:4), 2)',  'color', [0.7 0 0.7]);
-
-    % h5 = scatter(InfElimYear, 1, 500,  'p',  'filled',  'MarkerfaceColor', [0.7 0 0.7],  'markeredgecolor',  'k'); % Elimination year star
-    % h6 = scatter(TransElimYear, 1, 500,  'p',  'filled',  'MarkerfaceColor', [0 0.7 0],  'markeredgecolor',  'k');
-
-    % oldx = xlim;
-    % oldy = ylim;
-    % %%% NO VC
-    % % plot(VCyear * ones(1, 11), [0:oldy(2) / 10:oldy(2)], '--k')
-    % % text(VCyear - 0.4, oldy(2) - 50, 'VC', 'Rotation', 90, 'Fontsize', 14, 'HorizontalAlignment', 'right')
-
-    % %%% NO  RDT adjustments
-    % % plot(RDTyear * ones(1, 11), [0:oldy(2) / 10:oldy(2)], '--k')
-    % % text(RDTyear - 0.4, oldy(2) - 50, 'RDTs', 'Rotation', 90, 'Fontsize', 14, 'HorizontalAlignment', 'right')
-
-    % % plot(ScreenChangeYear * ones(1, 11), [0:oldy(2) / 10:oldy(2)], '--k')
-    % % text(ScreenChangeYear - 0.4, oldy(2) - 30, 'Target AS', 'Rotation', 90, 'Fontsize', 14, 'HorizontalAlignment', 'right')
-
-    % ylabel 'Number of humans'
-    % axis([(YearD(1) - 1) YearD(end) + 1 0 Inf])
-
-    % [hleg, hobj, hout, mout] = legend([h1 h2 h3 h4 h5 h6],  'Stage I',  'Stage II',  'Hospital',  'Stage I or II',  'Elim of human infection', ['Elim of human transmission']);
-    % hold off
-    % M = findobj(hobj,  'type',  'patch');
-    % set(M,  'MarkerSize', 15);
-
-    % %Annual case reporting and new infections
-    % subplot(4, 1, 4)
-    % hold on
-
-    % size(tYear_plot)
-    % size([ActiveCases1 + ActiveCases2])
-
-    % h1 = plot(tYear_plot, [ActiveCases1 + ActiveCases2],  'Color',  'r');
-    % h2 = plot(tYear_plot, [PassiveCases1 + PassiveCases2],  'Color',  'b');
-
-    % h3 = plot(tYear_plot, [ActiveCases1 + ActiveCases2 + PassiveCases1 + PassiveCases2],  'Color',  'k');
-    % h4 = plot(tYear_plot, [NewInfections],  'Color', [0 0.7 0]);
-
-    % h5 = scatter(ReportElimYear, 1, 500,  'p',  'k',  'filled',  'markeredgecolor',  'k'); % Elimination year star
-    % h6 = scatter(TransElimYear, 1, 500,  'p',  'filled',  'MarkerfaceColor', [0 0.7 0],  'markeredgecolor',  'k');
-
-    % maxT = max(NewInfections);
-    % oldx = xlim;
-    % oldy = ylim;
-    % % plot(VCyear * ones(1, 11), [0:oldy(2) / 10:oldy(2)], '--k')
-    % % plot(RDTyear * ones(1, 11), [0:oldy(2) / 10:oldy(2)], '--k')
-    % % plot(ScreenChangeYear * ones(1, 11), [0:oldy(2) / 10:oldy(2)], '--k')
-    % xlabel 'Time';
-    % ylabel({'Expected cases',  'per year'});
-
-    % maxT = max([1 maxT]);
-    % axis([(YearD(1) - 1) YearD(end) + 1 0 maxT])
-    % [hleg, hobj, hout, mout] = legend([h1 h2 h3 h4 h5 h6],  'Active',  'Passive',  'Total',  'New infections',  'Last reported case', ['Elim of human transmission']);
-    % %legend('Stage I','Stage II','Hospital')
-    % hold off
-    % M = findobj(hobj,  'type',  'patch');
-    % set(M,  'MarkerSize', 15);
-    % %legend('Active','Passive','Total','New infections')
-    % hold off
-
-    % %Tsetse infection dynamics
-    % subplot(4, 1, 3)
-    % hold on
-    % h = plot(tYear, 100 * (E_1V' + E_2V' + E_3V') ./ NV,  'Color', [1 0.55 0]);
-    % plot(tYear, 100 * I_V ./ NV,  '-r');
-
-    % oldx = xlim;
-    % oldy = ylim;
-    % % plot(VCyear * ones(1, 11), [0:oldy(2) / 10:oldy(2)], '--k')
-    % % plot(RDTyear * ones(1, 11), [0:oldy(2) / 10:oldy(2)], '--k')
-    % % plot(ScreenChangeYear * ones(1, 11), [0:oldy(2) / 10:oldy(2)], '--k')
-    % ylabel '% of vectors infected'
-    % axis([(YearD(1) - 1) YearD(end) + 1 0 Inf])
-    % legend('Exposed',  'Infectious')
-
-    % %Reservoir animal infection dynamics
-    % subplot(4, 1, 2)
-    % hold on
-    % h = plot(tYear, 100 * I_1H(:, 5)' ./ N_A,  'Color',  'r');
-    % oldx = xlim;
-    % oldy = ylim;
-    % % plot(VCyear * ones(1, 11), [0:oldy(2) / 10:oldy(2)], '--k')
-    % % plot(RDTyear * ones(1, 11), [0:oldy(2) / 10:oldy(2)], '--k')
-    % % plot(ScreenChangeYear * ones(1, 11), [0:oldy(2) / 10:oldy(2)], '--k')
-    % ylabel '% of animals infected'
-
-    % axis([(YearD(1) - 1) YearD(end) + 1 0 Inf])
-    % legend('Infectious')
-
-    % set(gcf, 'position', [918   466   642   872])
 
 end
 
@@ -716,7 +581,7 @@ function [newt, newpop, newTrans, newPassive1, newPassive2] = TauLeapHATmodel(t0
                 tmp = E_1V;
                 E_1V = 0;
                 E_2V = E_2V - tmp;
-                fprintf(1,  'in here:E_1V < 0, t', t)
+                fprintf(1, 'in here:E_1V < 0, t', t)
                 pause
             end
 
@@ -724,7 +589,7 @@ function [newt, newpop, newTrans, newPassive1, newPassive2] = TauLeapHATmodel(t0
                 tmp = E_2V;
                 E_2V = 0;
                 E_3V = E_3V - tmp;
-                fprintf(1,  'in here:E_2V < 0, t', t)
+                fprintf(1, 'in here:E_2V < 0, t', t)
                 pause
             end
 
@@ -732,7 +597,7 @@ function [newt, newpop, newTrans, newPassive1, newPassive2] = TauLeapHATmodel(t0
                 tmp = E_3V;
                 E_3V = 0;
                 I_V = I_V - tmp;
-                fprintf(1,  'in here:E_3V < 0')
+                fprintf(1, 'in here:E_3V < 0')
                 pause
             end
 
@@ -740,7 +605,7 @@ function [newt, newpop, newTrans, newPassive1, newPassive2] = TauLeapHATmodel(t0
                 tmp = I_V;
                 I_V = 0;
                 S_V = S_V - tmp;
-                fprintf(1,  'in here:I_V < 0, t', t)
+                fprintf(1, 'in here:I_V < 0, t', t)
                 pause
             end
 
@@ -768,10 +633,9 @@ function [newt, newpop, newTrans, newPassive1, newPassive2] = TauLeapHATmodel(t0
             newP_V(i + 1, :) = P_V;
             t = t + tau;
 
+            %Outputs
+            newt = [t0:tau:tend]'; %time steps
+            newpop = [newS_H newE_H newI_1H newI_2H newR_H newS_V newE_1V newE_2V newE_3V newI_V newG_V newP_V];
         end
-
-        %Outputs
-        newt = [t0:tau:tend]'; %time steps
-        newpop = [newS_H newE_H newI_1H newI_2H newR_H newS_V newE_1V newE_2V newE_3V newI_V newG_V newP_V];
 
     end
