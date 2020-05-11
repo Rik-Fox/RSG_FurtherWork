@@ -10,7 +10,7 @@ output_dir = os.path.join(os.path.normpath(
 iter_info = pd.read_csv(output_dir+"Iter_Info.csv")
 
 result_dir = os.path.join(output_dir, iter_info.Health_Zones[0], "Posterior_"+str(int(
-    iter_info.Kwamouth_PostIDs[0])), "Constant_Screening/StochRun#1/CATT_wb+CTC+CATT_4_Dilution/")
+    iter_info.Kwamouth_PostIDs[0])), "Constant_Screening/StochRun#1/CATT_wb+CTC+CATT_4_Dilution/StochRun#1/")
 
 # result_dir = os.path.join(output_dir, iter_info.Health_Zones[0], "Posterior_"+str(int(
 #     iter_info.Kwamouth_PostIDs[0])), "Constant_Screening", "StochRun#1", "CATT_wb+CTC+CATT_4_Dilution", "StochRun#1/")
@@ -20,6 +20,8 @@ Aggregate = pd.read_csv(result_dir+"Aggregate.csv")
 
 plt.plot(Classes.Time, sum(
     [Classes.I1_H1, Classes.I1_H4, Classes.I2_H1, Classes.I2_H4]))
+plt.title("Stochastic Output")
+plt.savefig("../Figures/Stoch_Output.png")
 
 
 #######################################################################
