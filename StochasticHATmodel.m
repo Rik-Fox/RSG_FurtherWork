@@ -23,6 +23,13 @@ function [Classes, Aggregate, Elim] = StochasticHATmodel(meff, ICs, Data, Paras,
     Elim = struct();
 
     [S_H, E_H, I_1H, I_2H, R_H, S_A, E_A, I_A, P_V, S_V, G_V, E_1V, E_2V, E_3V, I_V] = ICs{:};
+    
+    S_H=round(S_H);
+    E_H=round(E_H);
+    I_1H=round(I_1H);
+    I_2H=round(I_2H);
+    R_H=round(R_H);
+       
 
     %Get fixed/fitted parameters (including population size)
 
@@ -101,12 +108,13 @@ function [Classes, Aggregate, Elim] = StochasticHATmodel(meff, ICs, Data, Paras,
     %participation) given the number of total people screened each year and
     %accounting for everyone becoming random participants after the change in
     %active screening
+    %round screening numbers to integers
+    Data.ModelPeopleScreened=round(Data.ModelPeopleScreened);
     ScreenGroup1 = hygernd([ones(1, ix - 1) * (N(1) + N(2)) ones(1, NumberScreenings - ix + 1) * sum(N(1:4))], [ones(1, ix - 1) * N(1) ones(1, NumberScreenings - ix + 1) * (N(1) + N(3))], Data.ModelPeopleScreened);
+    %%% why would we get non zeros here
     ScreenGroup1(Data.ModelPeopleScreened == 0) = 0;
 
     ScreenByGroup = [ScreenGroup1' Data.ModelPeopleScreened' - ScreenGroup1' zeros(NumberScreenings, 4)];
-
-    % [0 9] * [1 2 3]
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %Main Tau-leap computation
@@ -142,6 +150,11 @@ function [Classes, Aggregate, Elim] = StochasticHATmodel(meff, ICs, Data, Paras,
     % calculate yearly uVector maintaining a constant death rate
     death_rate = (1 - Paras.u) * Paras.gamma_H;
     uVector = 1 - death_rate ./ yearlygamma_H;
+    
+    %Indicator to see if active screening (AS) has been stopped yet 
+    ASstop_indicator=0;
+    %TotalDetections
+    TotalDetections=[];
 
     %Run all intervention years
     if NumberScreenings > 0
@@ -176,7 +189,7 @@ function [Classes, Aggregate, Elim] = StochasticHATmodel(meff, ICs, Data, Paras,
 
             %%% have put _A in non-resivior, index 6, as that is the assumption we are making here (as per included comments). However construction of bitepref (s) would indicate _A be in index 5 not 6
             parameter = Paras;
-            parameter.f = f';
+            parameter.f = f; %Kat removed transpose
             parameter.meff = meff;
             parameter.mu_H = [Paras.mu_H * ones(1, x - 1) Paras.mu_A];
             parameter.sigma_H = [Paras.sigma_H * ones(1, x - 1) Paras.sigma_A];
@@ -241,10 +254,41 @@ function [Classes, Aggregate, Elim] = StochasticHATmodel(meff, ICs, Data, Paras,
             Select2 = zeros(x, 1); %How many stage 2 infected people are screened?
             TruePos2 = zeros(x, 1); %How many stage 2 infected test positive?
             DandT2 = zeros(x, 1); %How many stage 2 infected test positive and get treatment?
-            FalsePos = zeros(x, 1);
-
-            %%% changes from ScreenByGroup(i,1:2)' to ScreenByGroup(i,1:2),
-            %%% this makes it work but not sure if correct
+            FalsePos = zeros(x, 1);            
+            
+            %%%%%%%%%%%%% New RS %%%%%%%%%%%%%%%%%%%%
+            %stop screening if more than 3 years of zero detections (active
+            %or passive)
+            
+            
+            %If the last three years detections are all zero then screen
+            %no-one the next year (first cessation)
+            if ASstop_indicator==0 && (length(TotalDetections)>2)==1 && sum(TotalDetections(end-2:end))==0
+                ScreenByGroup(i,1:2)=[0 0];
+                %Set indicator to 1 if AS has stopped
+                ASstop_indicator=1;
+            end
+            
+            %If AS has already stopped, check if RS needs to happen
+            if ASstop_indicator==1 
+                if TotalDetections(end)==0 %no RS
+                    ScreenByGroup(i,1:2)=[0 0]; %each year of cessation, update the screening to be zero
+                
+                else %start RS
+                    %do nothing here to ScreenByGroup 
+                    %Set indicator to 2 as RS has started
+                    ASstop_indicator=2; %wait for 2 zeros before stopping again
+                end
+            end
+            
+            %If RS has started then do two zero screens before stopping
+            %again
+            if ASstop_indicator==2 && sum(TotalDetections(end-1:end))==0
+                ScreenByGroup(i,1:2)=[0,0];
+                %Set indicator to 1 as RS has stopped
+                ASstop_indicator=1; 
+            end
+              %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  
 
             if ScreenByGroup(i, 1) ~= 0
 
@@ -260,7 +304,8 @@ function [Classes, Aggregate, Elim] = StochasticHATmodel(meff, ICs, Data, Paras,
             end
 
             %Run Tau Leap
-            [t2, pop2, newTrans2, newPassive1v2, newPassive2v2] = TauLeapHATmodel(MaxTime + sum(Data.ModelScreeningFreq(1:i - 1)), MaxTime + sum(Data.ModelScreeningFreq(1:i)), tau, [S_H1 E_H1, (I_1H1 - DandT1') (I_2H1 - DandT2') (R_H1 + DandT1' + DandT2') S_V(end) E_1V(end) E_2V(end) E_3V(end) I_V(end) G_V(end) P_V(end)], parameter);
+%             [S_H1 E_H1 (I_1H1 - DandT1') (I_2H1 - DandT2') (R_H1 + DandT1' + DandT2') S_V(end) E_1V(end) E_2V(end) E_3V(end) I_V(end) G_V(end) P_V(end)];
+            [t2, pop2, newTrans2, newPassive1v2, newPassive2v2] = TauLeapHATmodel(MaxTime + sum(Data.ModelScreeningFreq(1:i - 1)), MaxTime + sum(Data.ModelScreeningFreq(1:i)), tau, [S_H1 E_H1 (I_1H1 - DandT1') (I_2H1 - DandT2') (R_H1 + DandT1' + DandT2') S_V(end) E_1V(end) E_2V(end) E_3V(end) I_V(end) G_V(end) P_V(end)], parameter);
 
             T = [T; T(end) + length(t2)]; %Gives all the times when intervention occurs
 
@@ -281,10 +326,17 @@ function [Classes, Aggregate, Elim] = StochasticHATmodel(meff, ICs, Data, Paras,
             Trans = [Trans newTrans2'];
             Passive1 = [Passive1 newPassive1v2'];
             Passive2 = [Passive2 newPassive2v2'];
+            PassiveCases2(i)=binornd(sum(sum(newPassive2v2(:,1:4))), uVector(i));
+            Deaths(i)=sum(sum(newPassive2v2(:,1:4))) - PassiveCases2(i);
             Active1 = [Active1 DandT1 + FalsePos];
             FalseP = [FalseP FalsePos];
             Active2 = [Active2 DandT2];
+            
+            %Includes underreporting on S2 passive
+            TotalDetections(i)=sum(sum(newPassive1v2(:,1:4)))+PassiveCases2(i)+sum(Active1(1:4,end))+sum(Active2(1:4,end));
 
+            %Number of infected hosts at end of year
+            NoInfHosts(i)=sum(I_1H(end,1:4))+sum(I_2H(end,1:4));
         end
 
     end
@@ -323,20 +375,30 @@ function [Classes, Aggregate, Elim] = StochasticHATmodel(meff, ICs, Data, Paras,
 
         %Passive detections (S1/S2) each time interval
         PassiveCases1(y) = sum(sum(Passive1(1:4, sum(Frequency(1:y - 1)) + 1:min(sum(Frequency(1:y)), sum(Frequency(1:NumberScreenings)) - 1)), 2));
-        PassiveCases2(y) = binornd(sum(sum(Passive2(1:4, sum(Frequency(1:y - 1)) + 1:min(sum(Frequency(1:y)), sum(Frequency(1:NumberScreenings)) - 1)), 2)), uVector(y));
+        %PassiveCases2(y) = binornd(sum(sum(Passive2(1:4, sum(Frequency(1:y - 1)) + 1:min(sum(Frequency(1:y)), sum(Frequency(1:NumberScreenings)) - 1)), 2)), uVector(y));
 
         %Deaths
-        Deaths(y) = sum(sum(Passive2(1:4, sum(Frequency(1:y - 1)) + 1:min(sum(Frequency(1:y)), sum(Frequency(1:NumberScreenings)) - 1)), 2)) - PassiveCases2(y);
+        %Deaths(y) = sum(sum(Passive2(1:4, sum(Frequency(1:y - 1)) + 1:min(sum(Frequency(1:y)), sum(Frequency(1:NumberScreenings)) - 1)), 2)) - PassiveCases2(y);
 
     end
 
+    %Record years with screening
+    Screened=sum(ScreenByGroup,2);
+    
     % Aggregate=struct('YearM',(t(T(1:end-1))'-MaxTime)./365+double(Data.Years(1)),'ActiveCases1',ActiveCases1,'ActiveCases2',ActiveCases2,'PassiveCases1',PassiveCases1,'PassiveCases2',PassiveCases2,...
     %     'Deaths',Deaths,'PersonYrs1',PersonYrs1,'PersonYrs2',PersonYrs2,'NewInfections',NewInfections);
-    Aggregate = table(Data.Years', Data.N_H_Scaled', ActiveCases1', ActiveCases2', PassiveCases1', PassiveCases2', Deaths', PersonYrs1', PersonYrs2', NewInfections', zeros(size(Deaths')), zeros(size(Deaths')), ...
-        'VariableNames', {'Year', 'ScaledN_H' 'ActiveM1', 'ActiveM2', 'PassiveM1', 'PassiveM2', 'DeathsM', 'PersonYrsM1', 'PersonYrsM2', 'NewInfM', 'NoInfHost', 'PerfectSpec'});
+    
+    %Update to include screened, N.B. No Inf hosts is the number at the end
+    %of each year so elimintion (below) could be up to 2 years after the
+    %last non-zero entry in NoInfHosts
+    Aggregate = table(Data.Years', Data.N_H_Scaled', Screened, ActiveCases1', ActiveCases2', PassiveCases1', PassiveCases2', Deaths', PersonYrs1', PersonYrs2', NewInfections', NoInfHosts', zeros(size(Deaths')), ...
+        'VariableNames', {'Year', 'ScaledN_H' 'ActiveScreened','ActiveM1', 'ActiveM2', 'PassiveM1', 'PassiveM2', 'DeathsM', 'PersonYrsM1', 'PersonYrsM2', 'NewInfM', 'NoInfHost', 'PerfectSpec'});
 
+    
+    
     %Find elimination years (Last transmission to humans, last reported human case, last
-    %human infection)
+    %human infection). N.B. elimination is taken to be the first year
+    %without transmission/cases/human infections
 
     %%% reworked this a little to use new tables and save to new output Elims
     %%% this allows me to store and collect for elim distributions over runs
@@ -444,8 +506,8 @@ function [newt, newpop, newTrans, newPassive1, newPassive2] = TauLeapHATmodel(t0
 
     N_H = S_H + E_H + I_1H + I_2H + R_H;
 
-    k = N_H ./ N_H(1);
-    f = (parameter.s .* k) / sum(parameter.s .* k);
+%     k = N_H ./ N_H(1);
+%     f = (parameter.s .* k) / sum(parameter.s .* k);
 
     dNH = N_H; dNH(N_H == 0) = 1;
 
@@ -469,7 +531,7 @@ function [newt, newpop, newTrans, newPassive1, newPassive2] = TauLeapHATmodel(t0
     for i = 1:TimeSteps
 
         %Event rates for hosts
-        rate(1:x) = I_V * alph * parameter.meff .* f .* S_H ./ dNH; %new infections
+        rate(1:x) = I_V * alph * parameter.meff .* parameter.f .* S_H ./ dNH; %new infections
         rate(x + 1:2 * x) = sigma_H .* E_H; %become infectious to tsetse (enter stage 1)
         rate(2 * x + 1:3 * x) = mu_H .* E_H; %death from exposed class
         rate(3 * x + 1:4 * x) = phi_H .* I_1H; %progress to stage 2
@@ -533,38 +595,38 @@ function [newt, newpop, newTrans, newPassive1, newPassive2] = TauLeapHATmodel(t0
             N_V = S_V + E_1V + E_2V + E_3V + I_V + G_V;
             %%%%%%Compute k1's
             k1(1) = xi_V * p_survivePV * P_V - alph * S_V - mu_V * S_V; %Teneral
-            k1(2) = alph * (1 - f_T) * (sum(f .* (I_1H + I_2H) ./ dNH) * p_V) * (S_V + epsilon * G_V) - 3 * sigma_V * E_1V - (mu_V + alph * f_T) * E_1V; %exposed
+            k1(2) = alph * (1 - f_T) * (sum(parameter.f .* (I_1H + I_2H) ./ dNH) * p_V) * (S_V + epsilon * G_V) - 3 * sigma_V * E_1V - (mu_V + alph * f_T) * E_1V; %exposed
             k1(3) = 3 * sigma_V * E_1V - (3 * sigma_V + mu_V + alph * f_T) * E_2V;
             k1(4) = 3 * sigma_V * E_2V - (3 * sigma_V + mu_V + alph * f_T) * E_3V;
             k1(5) = 3 * sigma_V * E_3V - (mu_V + alph * f_T) * I_V; %Infectious
-            k1(6) = alph * (1 - f_T) * (1 - sum(f .* (I_1H + I_2H) ./ dNH) * p_V) * S_V - alph * ((1 - f_T) * epsilon * (sum(f .* (I_1H + I_2H) ./ dNH) * p_V) + f_T) * G_V - mu_V * G_V; %Non-teneral
+            k1(6) = alph * (1 - f_T) * (1 - sum(parameter.f .* (I_1H + I_2H) ./ dNH) * p_V) * S_V - alph * ((1 - f_T) * epsilon * (sum(parameter.f .* (I_1H + I_2H) ./ dNH) * p_V) + f_T) * G_V - mu_V * G_V; %Non-teneral
             k1(7) = B_V * N_V - (xi_V + P_V / K_V) * P_V; %Pupa
 
             %%%%%%Compute k2's
             k2(1) = xi_V * p_survivePV * (P_V + tau * k1(7) / 2) - alph * (S_V + tau * k1(1) / 2) - mu_V * (S_V + tau * k1(1) / 2); %Teneral
-            k2(2) = alph * (1 - f_T) * (sum(f .* (I_1H + I_2H) ./ dNH) * p_V) * ((S_V + tau * k1(1) / 2) + epsilon * (G_V + tau * k1(6) / 2)) - 3 * sigma_V * (E_1V + tau * k1(2) / 2) - (mu_V + alph * f_T) * (E_1V + tau * k1(3) / 2); %exposed
+            k2(2) = alph * (1 - f_T) * (sum(parameter.f .* (I_1H + I_2H) ./ dNH) * p_V) * ((S_V + tau * k1(1) / 2) + epsilon * (G_V + tau * k1(6) / 2)) - 3 * sigma_V * (E_1V + tau * k1(2) / 2) - (mu_V + alph * f_T) * (E_1V + tau * k1(3) / 2); %exposed
             k2(3) = 3 * sigma_V * (E_1V + tau * k1(2) / 2) - (3 * sigma_V + mu_V + alph * f_T) * (E_2V + tau * k1(3) / 2);
             k2(4) = 3 * sigma_V * (E_2V + tau * k1(3) / 2) - (3 * sigma_V + mu_V + alph * f_T) * (E_3V + tau * k1(4) / 2);
             k2(5) = 3 * sigma_V * (E_3V + tau * k1(4) / 2) - (mu_V + alph * f_T) * (I_V + tau * k1(5) / 2); %Infectious
-            k2(6) = alph * (1 - f_T) * (1 - sum(f .* (I_1H + I_2H) ./ dNH) * p_V) * (S_V + tau * k1(1) / 2) - alph * ((1 - f_T) * epsilon * (sum(f .* (I_1H + I_2H) ./ dNH) * p_V) + f_T) * (G_V + tau * k1(6) / 2) - mu_V * (G_V + tau * k1(6) / 2); %Non-teneral
+            k2(6) = alph * (1 - f_T) * (1 - sum(parameter.f .* (I_1H + I_2H) ./ dNH) * p_V) * (S_V + tau * k1(1) / 2) - alph * ((1 - f_T) * epsilon * (sum(parameter.f .* (I_1H + I_2H) ./ dNH) * p_V) + f_T) * (G_V + tau * k1(6) / 2) - mu_V * (G_V + tau * k1(6) / 2); %Non-teneral
             k2(7) = B_V * N_V - (xi_V + (P_V + tau * k1(7) / 2) / K_V) * (P_V + tau * k1(7) / 2); %Pupa
 
             %%%%%%Compute k3's
             k3(1) = xi_V * p_survivePV * (P_V + tau * k2(7) / 2) - alph * (S_V + tau * k2(1) / 2) - mu_V * (S_V + tau * k2(1) / 2); %Teneral
-            k3(2) = alph * (1 - f_T) * (sum(f .* (I_1H + I_2H) ./ dNH) * p_V) * ((S_V + tau * k2(1) / 2) + epsilon * (G_V + tau * k2(6) / 2)) - 3 * sigma_V * (E_1V + tau * k2(3) / 2) - (mu_V + alph * f_T) * (E_1V + tau * k2(3) / 2); %exposed
+            k3(2) = alph * (1 - f_T) * (sum(parameter.f .* (I_1H + I_2H) ./ dNH) * p_V) * ((S_V + tau * k2(1) / 2) + epsilon * (G_V + tau * k2(6) / 2)) - 3 * sigma_V * (E_1V + tau * k2(3) / 2) - (mu_V + alph * f_T) * (E_1V + tau * k2(3) / 2); %exposed
             k3(3) = 3 * sigma_V * (E_1V + tau * k2(3) / 2) - (3 * sigma_V + mu_V + alph * f_T) * (E_2V + tau * k2(3) / 2);
             k3(4) = 3 * sigma_V * (E_2V + tau * k2(3) / 2) - (3 * sigma_V + mu_V + alph * f_T) * (E_3V + tau * k2(4) / 2);
             k3(5) = 3 * sigma_V * (E_3V + tau * k2(4) / 2) - (mu_V + alph * f_T) * (I_V + tau * k2(5) / 2); %Infectious
-            k3(6) = alph * (1 - f_T) * (1 - sum(f .* (I_1H + I_2H) ./ dNH) * p_V) * (S_V + tau * k2(1) / 2) - alph * ((1 - f_T) * epsilon * (sum(f .* (I_1H + I_2H) ./ dNH) * p_V) + f_T) * (G_V + tau * k2(6) / 2) - mu_V * (G_V + tau * k2(6) / 2); %Non-teneral
+            k3(6) = alph * (1 - f_T) * (1 - sum(parameter.f .* (I_1H + I_2H) ./ dNH) * p_V) * (S_V + tau * k2(1) / 2) - alph * ((1 - f_T) * epsilon * (sum(parameter.f .* (I_1H + I_2H) ./ dNH) * p_V) + f_T) * (G_V + tau * k2(6) / 2) - mu_V * (G_V + tau * k2(6) / 2); %Non-teneral
             k3(7) = B_V * N_V - (xi_V + (P_V + tau * k2(7) / 2) / K_V) * (P_V + tau * k2(7) / 2); %Pupa
 
             %%%%%%Compute k4's
             k4(1) = xi_V * p_survivePV * (P_V + tau * k3(7)) - alph * (S_V + tau * k3(1)) - mu_V * (S_V + tau * k3(1)); %Teneral
-            k4(2) = alph * (1 - f_T) * (sum(f .* (I_1H + I_2H) ./ dNH) * p_V) * ((S_V + tau * k3(1)) + epsilon * (G_V + tau * k3(6))) - 3 * sigma_V * (E_1V + tau * k3(2)) - (mu_V + alph * f_T) * (E_1V + tau * k3(2)); %exposed
+            k4(2) = alph * (1 - f_T) * (sum(parameter.f .* (I_1H + I_2H) ./ dNH) * p_V) * ((S_V + tau * k3(1)) + epsilon * (G_V + tau * k3(6))) - 3 * sigma_V * (E_1V + tau * k3(2)) - (mu_V + alph * f_T) * (E_1V + tau * k3(2)); %exposed
             k4(3) = 3 * sigma_V * (E_1V + tau * k3(2)) - (3 * sigma_V + mu_V + alph * f_T) * (E_2V + tau * k3(3));
             k4(4) = 3 * sigma_V * (E_2V + tau * k3(3)) - (3 * sigma_V + mu_V + alph * f_T) * (E_3V + tau * k3(4));
             k4(5) = 3 * sigma_V * (E_3V + tau * k3(4)) - (mu_V + alph * f_T) * (I_V + tau * k3(5)); %Infectious
-            k4(6) = alph * (1 - f_T) * (1 - sum(f .* (I_1H + I_2H) ./ dNH) * p_V) * (S_V + tau * k3(1)) - alph * ((1 - f_T) * epsilon * (sum(f .* (I_1H + I_2H) ./ dNH) * p_V) + f_T) * (G_V + tau * k3(6)) - mu_V * (G_V + tau * k3(6)); %Non-teneral
+            k4(6) = alph * (1 - f_T) * (1 - sum(parameter.f .* (I_1H + I_2H) ./ dNH) * p_V) * (S_V + tau * k3(1)) - alph * ((1 - f_T) * epsilon * (sum(parameter.f .* (I_1H + I_2H) ./ dNH) * p_V) + f_T) * (G_V + tau * k3(6)) - mu_V * (G_V + tau * k3(6)); %Non-teneral
             k4(7) = B_V * N_V - (xi_V + (P_V + tau * k3(7)) / K_V) * (P_V + tau * k3(7)); %Pupa
 
             %Compute new vector numbers after time tau

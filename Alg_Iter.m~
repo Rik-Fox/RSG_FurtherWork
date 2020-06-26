@@ -30,7 +30,7 @@ function Alg_Iter(N_post, N_sr, N_algs, N_algs_sr)
 %     2020, at the end of each of these the system state is used as inital
 %     conditions for N_alg_sr number of runs for each trial algorithm.
 %     Yeilding N_sr*N_alg_sr simulations of each algorithm per healthzone
-%     per posterior per screening projection method
+%     per posterior per screening method
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 

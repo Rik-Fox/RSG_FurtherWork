@@ -138,12 +138,12 @@ function [Classes, Aggregate] = ODEHATmodel(meff, ICs, Data, Paras, ProjStrat)
         TruePos = TurnOut(:, s) * ScreeningSensitivity(s);
         FalsePos = TurnOut(:, s) * (1 - ScreeningSpecificity(s));
 
-%         if ScreeningSpecificity(s) ~= 1 && ...
-%                 ((Paras.year_spec_100pct == 0 && ((E_H(end, :) + I1_H(end, :) + I2_H(end, :)) * (TruePos - FalsePos) * 10000 / Data.N_H < 0.5 && Data.ModelScreeningTime(s) >= 2018)) || ...
-%                 (Paras.year_spec_100pct ~= 0 && Data.ModelScreeningTime(s) >= Paras.year_spec_100pct))
-%             ScreeningSpecificity(s:end) = 1;
-%             FalsePos = TurnOut(:, s) * (1 - ScreeningSpecificity(s));
-%         end
+        if ScreeningSpecificity(s) ~= 1 && ...
+                ((Paras.year_spec_100pct == 0 && ((E_H(end, :) + I1_H(end, :) + I2_H(end, :)) * (TruePos - FalsePos) * 10000 / Data.N_H < 0.5 && Data.ModelScreeningTime(s) >= 2018)) || ...
+                (Paras.year_spec_100pct ~= 0 && Data.ModelScreeningTime(s) >= Paras.year_spec_100pct))
+            ScreeningSpecificity(s:end) = 1;
+            FalsePos = TurnOut(:, s) * (1 - ScreeningSpecificity(s));
+        end
 
         Spec(s) = ScreeningSpecificity(s) == 1;
         Active1(s) = I1_H(end, 1:4) * TruePos + S_H(end, 1:4) * FalsePos;

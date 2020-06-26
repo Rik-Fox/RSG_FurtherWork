@@ -10,18 +10,30 @@ output_dir = os.path.join(os.path.normpath(
 iter_info = pd.read_csv(output_dir+"Iter_Info.csv")
 
 result_dir = os.path.join(output_dir, iter_info.Health_Zones[0], "Posterior_"+str(int(
-    iter_info.Kwamouth_PostIDs[0])), "Constant_Screening/StochRun#1/CATT_wb+CTC+CATT_4_Dilution/StochRun#1/")
+    iter_info.Kwamouth_PostIDs[0])), "Constant_Screening/StochRun#1/CATT_wb+CTC+CATT_4_Dilution/")
+stoch_result_dir = os.path.join(result_dir, "StochRun#1/")
 
 # result_dir = os.path.join(output_dir, iter_info.Health_Zones[0], "Posterior_"+str(int(
 #     iter_info.Kwamouth_PostIDs[0])), "Constant_Screening", "StochRun#1", "CATT_wb+CTC+CATT_4_Dilution", "StochRun#1/")
 
 Classes = pd.read_csv(result_dir+"Classes.csv")
+stoch_Classes = pd.read_csv(stoch_result_dir+"Classes.csv")
 Aggregate = pd.read_csv(result_dir+"Aggregate.csv")
+stoch_Aggregate = pd.read_csv(stoch_result_dir+"Aggregate.csv")
 
 plt.plot(Classes.Time, sum(
     [Classes.I1_H1, Classes.I1_H4, Classes.I2_H1, Classes.I2_H4]))
-plt.title("Stochastic Output")
-plt.savefig("../Figures/Stoch_Output.png")
+plt.plot(stoch_Classes.Time, sum(
+    [stoch_Classes.I1_H1, stoch_Classes.I1_H4, stoch_Classes.I2_H1, stoch_Classes.I2_H4]), linestyle=':')
+plt.ylabel("Sum of I1 and I2 class")
+plt.xlabel("Year")
+plt.title("Human Infection of HAT")
+plt.savefig("../Figures/Kwamouth_Infection_example.png")
+
+
+plt.figure()
+plt.plot(Aggregate.Year, Aggregate.ActiveM2)
+plt.plot(Aggregate.Year, stoch_Aggregate.ActiveM2)
 
 
 #######################################################################
