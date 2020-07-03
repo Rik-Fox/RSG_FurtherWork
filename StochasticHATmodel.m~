@@ -340,13 +340,11 @@ function [Classes, Aggregate, Elim] = StochasticHATmodel(meff, ICs, Data, Paras,
             TotalDetections(i)=sum(sum(newPassive1v2(:,1:4)))+PassiveCases2(i)+sum(Active1(1:4,end))+sum(Active2(1:4,end));
 
             %Number of infected hosts at end of year
-            NoInfHosts(i)=sum(I_1H(end,1:4))+sum(I_2H(end,1:4));         
+            NoInfHosts(i)=sum(I_1H(end,1:4))+sum(I_2H(end,1:4));
+        end
+        
+        if NoInfHosts(i) == 0
             
-            if NoInfHosts(i) == 0 && ASstop_indicator == 1
-                
-                
-            end
-        end            
 
     end
 

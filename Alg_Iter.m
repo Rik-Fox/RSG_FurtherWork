@@ -204,8 +204,6 @@ function Alg_Iter(N_post, N_sr, N_algs, N_algs_sr)
                     %%% HAT has not been Eliminated so dont save Elim output
                     [Classes0, Aggregate0, ~] = StochasticHATmodel(meff, Data_ICs, Data_20, Paras, ProjStrat);
                     
-                    
-
                     %%% now use this as ICs for algorithm simulations
                     pop = Classes0(end, :);
                     model_ICs = {[pop.S_H1, pop.S_H2, pop.S_H3, pop.S_H4, 0, 0], ...
